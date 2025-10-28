@@ -14,7 +14,7 @@
 import Logging
 import NIO
 
-class MQTTChannelHandler: ChannelDuplexHandler {
+final class MQTTChannelHandler: ChannelDuplexHandler {
     struct Configuration {
         let disablePing: Bool
         let pingInterval: TimeAmount
@@ -32,13 +32,13 @@ class MQTTChannelHandler: ChannelDuplexHandler {
     /*private*/ var stateMachine: StateMachine<ChannelHandlerContext>
     private let publishListeners: MQTTListeners<Result<MQTTPublishInfo, Error>>
 
-    var decoder: NIOSingleStepByteToMessageProcessor<ByteToMQTTMessageDecoder>
+    private var decoder: NIOSingleStepByteToMessageProcessor<ByteToMQTTMessageDecoder>
     private let logger: Logger
     private let configuration: Configuration
 
-    var pingreqTimeout: TimeAmount
-    var lastPingreqEventTime: NIODeadline
-    var pingreqTask: Scheduled<Void>?
+    private var pingreqTimeout: TimeAmount
+    private var lastPingreqEventTime: NIODeadline
+    private var pingreqTask: Scheduled<Void>?
 
     init(
         configuration: Configuration,
@@ -58,8 +58,7 @@ class MQTTChannelHandler: ChannelDuplexHandler {
         self.pingreqTask = nil
     }
 
-    @usableFromInline
-    func setConnected(context: ChannelHandlerContext) {
+    private func setConnected(context: ChannelHandlerContext) {
         self.stateMachine.setConnected(context: context)
         if !self.configuration.disablePing {
             guard self.pingreqTask == nil else { return }
@@ -83,14 +82,14 @@ class MQTTChannelHandler: ChannelDuplexHandler {
         self.pingreqTask = nil
 
         // channel is inactive so we should fail or tasks in progress
-        self.closeAndFailTasks(with: MQTTError.serverClosedConnection)
+        self.failTasksAndClose(with: MQTTError.serverClosedConnection)
 
         context.fireChannelInactive()
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
         // we caught an error so we should fail all active tasks
-        self.closeAndFailTasks(with: error)
+        self.failTasksAndClose(with: error)
     }
 
     func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
@@ -134,7 +133,7 @@ class MQTTChannelHandler: ChannelDuplexHandler {
                 case .unhandled:
                     self.processUnhandledPacket(message, context: context)
                 case .closeConnection(let error):
-                    self.closeAndFailTasks(with: error)
+                    self.failTasksAndClose(with: error)
                     context.fireErrorCaught(error)
                     context.close(promise: nil)
                     if case MQTTError.unexpectedMessage = error {
@@ -148,7 +147,7 @@ class MQTTChannelHandler: ChannelDuplexHandler {
                 )
             }
         } catch {
-            self.closeAndFailTasks(with: error)
+            self.failTasksAndClose(with: error)
             context.fireErrorCaught(error)
             context.close(promise: nil)
             self.logger.error("Error processing MQTT message", metadata: ["mqtt_error": .string("\(error)")])
@@ -216,7 +215,6 @@ class MQTTChannelHandler: ChannelDuplexHandler {
 
         switch self.stateMachine.sendPacket(task) {
         case .sendPacket(let context):
-            // TODO: remove this check once everything runs on the same event loop
             if self.eventLoop.inEventLoop {
                 _ = context.channel.writeAndFlush(message)
             } else {
@@ -250,7 +248,7 @@ class MQTTChannelHandler: ChannelDuplexHandler {
     // MARK: - Task Handling
 
     /// process packets where no equivalent task was found
-    func processUnhandledPacket(_ packet: MQTTPacket, context: ChannelHandlerContext) {
+    private func processUnhandledPacket(_ packet: MQTTPacket, context: ChannelHandlerContext) {
         // we only send response to v5 server
         switch packet.type {
         case .PUBREC:
@@ -274,7 +272,7 @@ class MQTTChannelHandler: ChannelDuplexHandler {
         }
     }
 
-    func closeAndFailTasks(with error: Error) {
+    private func failTasksAndClose(with error: Error) {
         switch self.stateMachine.close() {
         case .failTasksAndClose(let tasks):
             tasks.forEach { $0.fail(error) }
@@ -289,7 +287,7 @@ class MQTTChannelHandler: ChannelDuplexHandler {
         self.pingreqTimeout = timeout
     }
 
-    func schedulePingreqTask(_ context: ChannelHandlerContext) {
+    private func schedulePingreqTask(_ context: ChannelHandlerContext) {
         guard context.channel.isActive else { return }
 
         self.pingreqTask = context.eventLoop.scheduleTask(deadline: self.lastPingreqEventTime + self.pingreqTimeout) {
@@ -305,7 +303,7 @@ class MQTTChannelHandler: ChannelDuplexHandler {
                 .whenComplete { result in
                     switch result {
                     case .failure(let error):
-                        self.closeAndFailTasks(with: error)
+                        self.failTasksAndClose(with: error)
                         context.fireErrorCaught(error)
                     case .success:
                         break
