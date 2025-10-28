@@ -229,7 +229,7 @@ final class MQTTConnection {
     }
 
     func sendMessage(_ message: MQTTPacket, checkInbound: @escaping (MQTTPacket) throws -> Bool) -> EventLoopFuture<MQTTPacket> {
-        self.channelHandler.sendMessage(channel: self.channel, message, checkInbound: checkInbound)
+        self.channelHandler.sendMessage(message, checkInbound: checkInbound)
     }
 
     func updatePingreqTimeout(_ timeout: TimeAmount) {
