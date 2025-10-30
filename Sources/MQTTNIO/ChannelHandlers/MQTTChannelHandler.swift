@@ -109,9 +109,6 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
         let buffer = self.unwrapInboundIn(data)
         do {
             try self.decoder.process(buffer: buffer) { message in
-                if message.type == .PUBREL {
-                    self.respondToPubrel(message, context: context)
-                }
                 switch self.stateMachine.receivedPacket(message) {
                 case .respondAndReturn:
                     let publishMessage = message as! MQTTPublishPacket
@@ -127,6 +124,9 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
                     self.respondToPublish(publishMessage, context: context)
                     return
                 case .ignore(let task):
+                    if message.type == .PUBREL {
+                        self.respondToPubrel(message, context: context)
+                    }
                     task.succeed(message)
                 case .fail(let task, let error):
                     task.fail(error)
