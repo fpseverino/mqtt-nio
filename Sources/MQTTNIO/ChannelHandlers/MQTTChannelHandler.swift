@@ -206,6 +206,8 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
         promise: MQTTPromise<MQTTPacket>,
         checkInbound: @escaping (MQTTPacket) throws -> Bool
     ) {
+        self.eventLoop.assertInEventLoop()
+
         let task = MQTTTask(
             promise: promise,
             on: self.eventLoop,
@@ -215,13 +217,7 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
 
         switch self.stateMachine.sendPacket(task) {
         case .sendPacket(let context):
-            if self.eventLoop.inEventLoop {
-                _ = context.channel.writeAndFlush(message)
-            } else {
-                self.eventLoop.execute {
-                    _ = context.channel.writeAndFlush(message)
-                }
-            }
+            _ = context.channel.writeAndFlush(message)
         case .throwError(let error):
             task.fail(error)
         }
