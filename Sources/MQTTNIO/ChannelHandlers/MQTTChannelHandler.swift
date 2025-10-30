@@ -40,6 +40,10 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
     private var lastPingreqEventTime: NIODeadline
     private var pingreqCallback: NIOScheduledCallback?
 
+    var pingreqTimeout: TimeAmount
+    var lastPingreqEventTime: NIODeadline
+    var pingreqCallback: NIOScheduledCallback?
+
     init(
         configuration: Configuration,
         eventLoop: any EventLoop,
