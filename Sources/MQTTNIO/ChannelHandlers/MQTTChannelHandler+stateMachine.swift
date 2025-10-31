@@ -16,17 +16,17 @@ extension MQTTChannelHandler {
     struct StateMachine<Context>: ~Copyable {
         @usableFromInline
         enum State: ~Copyable {
-            case uninitialised
-            case connected(ConnectedState)
-            case disconnected
+            case uninitialized
+            case initialized(InitializedState)
+            case closed
 
             @usableFromInline
             var description: String {
                 borrowing get {
                     switch self {
-                    case .uninitialised: "uninitialised"
-                    case .connected: "connected"
-                    case .disconnected: "disconnected"
+                    case .uninitialized: "uninitialized"
+                    case .initialized: "initialized"
+                    case .closed: "closed"
                     }
                 }
             }
@@ -35,13 +35,13 @@ extension MQTTChannelHandler {
         var state: State
 
         @usableFromInline
-        struct ConnectedState {
+        struct InitializedState {
             let context: Context
             var tasks: [MQTTTask]
         }
 
         init() {
-            self.state = .uninitialised
+            self.state = .uninitialized
         }
 
         private init(_ state: consuming State) {
@@ -50,14 +50,14 @@ extension MQTTChannelHandler {
 
         /// handler has become active
         @usableFromInline
-        mutating func setConnected(context: Context) {
+        mutating func setInitialized(context: Context) {
             switch consume self.state {
-            case .uninitialised:
-                self = .connected(.init(context: context, tasks: []))
-            case .connected:
-                preconditionFailure("Cannot set connected state when state is connected")
-            case .disconnected:
-                preconditionFailure("Cannot set connected state when state is disconnected")
+            case .uninitialized:
+                self = .initialized(.init(context: context, tasks: []))
+            case .initialized:
+                preconditionFailure("Cannot set initialized state when state is initialized")
+            case .closed:
+                preconditionFailure("Cannot set initialized state when state is closed")
             }
         }
 
@@ -71,14 +71,14 @@ extension MQTTChannelHandler {
         @usableFromInline
         mutating func sendPacket(_ task: MQTTTask) -> SendPacketAction {
             switch consume self.state {
-            case .uninitialised:
-                preconditionFailure("Cannot send packet when uninitialised")
-            case .connected(var state):
+            case .uninitialized:
+                preconditionFailure("Cannot send packet when uninitialized")
+            case .initialized(var state):
                 state.tasks.append(task)
-                self = .connected(state)
+                self = .initialized(state)
                 return .sendPacket(state.context)
-            case .disconnected:
-                self = .disconnected
+            case .closed:
+                self = .closed
                 return .throwError(MQTTError.noConnection)
             }
         }
@@ -89,11 +89,11 @@ extension MQTTChannelHandler {
             case respondAndReturn
             /// .CONNACK, .PUBACK, .PUBREC, .PUBCOMP, .SUBACK, .UNSUBACK, .PINGRESP, .AUTH
             /// .PUBREL
-            case ignore(MQTTTask)
+            case succeedTask(MQTTTask)
             /// checkInbound threw error
-            case fail(MQTTTask, any Error)
+            case failTask(MQTTTask, any Error)
             /// process packets where no equivalent task was found
-            case unhandled
+            case unhandledTask
             /// .DISCONNECT
             /// .CONNECT, .SUBSCRIBE, .UNSUBSCRIBE, .PINGREQ
             case closeConnection(any Error)
@@ -103,12 +103,12 @@ extension MQTTChannelHandler {
         @usableFromInline
         mutating func receivedPacket(_ packet: MQTTPacket) -> ReceivedPacketAction {
             switch consume self.state {
-            case .uninitialised:
-                preconditionFailure("Cannot receive packet when uninitialised")
-            case .connected(var state):
+            case .uninitialized:
+                preconditionFailure("Cannot receive packet when uninitialized")
+            case .initialized(var state):
                 switch packet.type {
                 case .PUBLISH:
-                    self = .connected(state)
+                    self = .initialized(state)
                     return .respondAndReturn
                 case .CONNACK, .PUBACK, .PUBREC, .PUBCOMP, .SUBACK, .UNSUBACK, .PINGRESP, .AUTH, .PUBREL:
                     for task in state.tasks {
@@ -116,28 +116,28 @@ extension MQTTChannelHandler {
                             // should this task respond to inbound packet
                             if try task.checkInbound(packet) {
                                 state.tasks.removeAll { $0 === task }
-                                self = .connected(state)
-                                return .ignore(task)
+                                self = .initialized(state)
+                                return .succeedTask(task)
                             }
                         } catch {
                             state.tasks.removeAll { $0 === task }
-                            self = .connected(state)
-                            return .fail(task, error)
+                            self = .initialized(state)
+                            return .failTask(task, error)
                         }    
                     }
-                    self = .connected(state)
-                    return .unhandled
+                    self = .initialized(state)
+                    return .unhandledTask
                 case .DISCONNECT:
                     let disconnectMessage = packet as! MQTTDisconnectPacket
                     let ack = MQTTAckV5(reason: disconnectMessage.reason, properties: disconnectMessage.properties)
-                    self = .connected(state)
+                    self = .initialized(state)
                     return .closeConnection(MQTTError.serverDisconnection(ack))
                 case .CONNECT, .SUBSCRIBE, .UNSUBSCRIBE, .PINGREQ:
-                    self = .connected(state)
+                    self = .initialized(state)
                     return .closeConnection(MQTTError.unexpectedMessage)
                 }
-            case .disconnected:
-                preconditionFailure("Cannot receive packet when disconnected")
+            case .closed:
+                preconditionFailure("Cannot receive packet when closed")
             }
         }
 
@@ -150,13 +150,13 @@ extension MQTTChannelHandler {
         @usableFromInline
         mutating func schedulePingReq() -> SchedulePingReqAction {
             switch consume self.state {
-            case .uninitialised:
-                preconditionFailure("Cannot schedule PINGREQ when uninitialised")
-            case .connected(let state):
-                self = .connected(state)
+            case .uninitialized:
+                preconditionFailure("Cannot schedule PINGREQ when uninitialized")
+            case .initialized(let state):
+                self = .initialized(state)
                 return .schedule(state.context)
-            case .disconnected:
-                self = .disconnected
+            case .closed:
+                self = .closed
                 return .doNothing
             }
         }
@@ -170,28 +170,28 @@ extension MQTTChannelHandler {
         @usableFromInline
         mutating func close() -> CloseAction {
             switch consume self.state {
-            case .uninitialised:
-                self = .disconnected
+            case .uninitialized:
+                self = .closed
                 return .doNothing
-            case .connected(let state):
-                self = .disconnected
+            case .initialized(let state):
+                self = .closed
                 return .failTasksAndClose(state.tasks)
-            case .disconnected:
-                self = .disconnected
+            case .closed:
+                self = .closed
                 return .doNothing
             }
         }
 
-        private static var uninitialised: Self {
-            StateMachine(.uninitialised)
+        private static var uninitialized: Self {
+            StateMachine(.uninitialized)
         }
 
-        private static func connected(_ state: ConnectedState) -> Self {
-            StateMachine(.connected(state))
+        private static func initialized(_ state: InitializedState) -> Self {
+            StateMachine(.initialized(state))
         }
 
-        private static var disconnected: Self {
-            StateMachine(.disconnected)
+        private static var closed: Self {
+            StateMachine(.closed)
         }
     }
 }

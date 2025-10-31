@@ -58,8 +58,8 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
         self.pingreqCallback = nil
     }
 
-    private func setConnected(context: ChannelHandlerContext) {
-        self.stateMachine.setConnected(context: context)
+    private func setInitialized(context: ChannelHandlerContext) {
+        self.stateMachine.setInitialized(context: context)
         if !self.configuration.disablePing {
             guard self.pingreqCallback == nil else { return }
             self.schedulePingreqCallback()
@@ -68,12 +68,12 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
 
     func handlerAdded(context: ChannelHandlerContext) {
         if context.channel.isActive {
-            self.setConnected(context: context)
+            self.setInitialized(context: context)
         }
     }
 
     func channelActive(context: ChannelHandlerContext) {
-        self.setConnected(context: context)
+        self.setInitialized(context: context)
         context.fireChannelActive()
     }
 
@@ -123,14 +123,14 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
                     )
                     self.respondToPublish(publishMessage, context: context)
                     return
-                case .ignore(let task):
+                case .succeedTask(let task):
                     if message.type == .PUBREL {
                         self.respondToPubrel(message, context: context)
                     }
                     task.succeed(message)
-                case .fail(let task, let error):
+                case .failTask(let task, let error):
                     task.fail(error)
-                case .unhandled:
+                case .unhandledTask:
                     self.processUnhandledPacket(message, context: context)
                 case .closeConnection(let error):
                     self.failTasksAndClose(with: error)
