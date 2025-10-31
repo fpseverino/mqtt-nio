@@ -142,6 +142,26 @@ extension MQTTChannelHandler {
         }
 
         @usableFromInline
+        enum SchedulePingReqAction {
+            case schedule(Context)
+            case doNothing
+        }
+
+        @usableFromInline
+        mutating func schedulePingReq() -> SchedulePingReqAction {
+            switch consume self.state {
+            case .uninitialised:
+                preconditionFailure("Cannot schedule PINGREQ when uninitialised")
+            case .connected(let state):
+                self = .connected(state)
+                return .schedule(state.context)
+            case .disconnected:
+                self = .disconnected
+                return .doNothing
+            }
+        }
+
+        @usableFromInline
         enum CloseAction {
             case failTasksAndClose([MQTTTask])
             case doNothing
