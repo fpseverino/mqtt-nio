@@ -4,9 +4,11 @@ on:
    push:
      branches:
      - main
+     - v3
    pull_request:
      branches:
      - main
+     - v3
    release:
      types: [published]
    workflow_dispatch:
