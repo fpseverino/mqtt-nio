@@ -12,7 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 import Logging
-import NIO
+import NIOCore
 
 final class MQTTChannelHandler: ChannelDuplexHandler {
     struct Configuration {
