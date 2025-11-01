@@ -81,7 +81,7 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
         self.pingreqCallback?.cancel()
         self.pingreqCallback = nil
 
-        // channel is inactive so we should fail or tasks in progress
+        // channel is inactive so we should fail all tasks in progress
         self.failTasksAndClose(with: MQTTError.serverClosedConnection)
 
         context.fireChannelInactive()
