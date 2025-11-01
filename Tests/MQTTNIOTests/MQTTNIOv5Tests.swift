@@ -417,7 +417,7 @@ final class MQTTNIOv5Tests: XCTestCase {
 
         _ = try client.v5.connect().wait()
         let authFuture = client.v5.auth(properties: []) { _, eventLoop in
-            return eventLoop.makeSucceededFuture(.init(reason: .continueAuthentication, properties: []))
+            eventLoop.makeSucceededFuture(.init(reason: .continueAuthentication, properties: []))
         }
         XCTAssertThrowsError(try authFuture.wait()) { error in
             switch error {

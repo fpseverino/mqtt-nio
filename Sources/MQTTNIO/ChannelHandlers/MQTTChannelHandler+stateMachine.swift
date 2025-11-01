@@ -123,7 +123,7 @@ extension MQTTChannelHandler {
                             state.tasks.removeAll { $0 === task }
                             self = .initialized(state)
                             return .failTask(task, error)
-                        }    
+                        }
                     }
                     self = .initialized(state)
                     return .unhandledTask
