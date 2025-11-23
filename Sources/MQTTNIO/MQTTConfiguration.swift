@@ -20,7 +20,7 @@ import NIOSSL
 
 extension MQTTClient {
     /// Version of MQTT server to connect to
-    public enum Version {
+    public enum Version: Sendable {
         case v3_1_1
         case v5_0
     }
@@ -30,7 +30,7 @@ extension MQTTClient {
     /// The TLS Configuration type to use if defined by the EventLoopGroup the client is using.
     /// If you don't provide an EventLoopGroup then the EventLoopGroup created will be defined
     /// by this variable. It is recommended on iOS you use NIO Transport Services.
-    public enum TLSConfigurationType {
+    public enum TLSConfigurationType: Sendable {
         /// NIOSSL TLS configuration
         #if os(macOS) || os(Linux)
         case niossl(TLSConfiguration)
@@ -41,14 +41,14 @@ extension MQTTClient {
         #endif
     }
 
-    public struct WebSocketConfiguration {
+    public struct WebSocketConfiguration: Sendable {
         /// Initialize MQTTClient WebSocket configuration struct
         /// - Parameters:
         ///   - urlPath: WebSocket URL, defaults to "/mqtt"
         ///   - maxFrameSize: Max frame size WebSocket client will allow
         ///   - initialRequestHeaders: Additional headers to add to initial HTTP request
         public init(
-            urlPath: String,
+            urlPath: String = "/mqtt",
             maxFrameSize: Int = 1 << 14,
             initialRequestHeaders: HTTPHeaders = [:]
         ) {
@@ -66,10 +66,43 @@ extension MQTTClient {
     }
 
     /// Configuration for MQTTClient
-    public struct Configuration {
+    public struct Configuration: Sendable {
+        /// Configuration for TLS (Transport Layer Security) encryption.
+        ///
+        /// This structure allows you to enable or disable encrypted connections to the MQTT broker.
+        /// When enabled, it requires an `NIOSSLContext` and optionally a server name for SNI (Server Name Indication).
+        public struct TLS: Sendable {
+            enum Base {
+                case disable
+                case enable(NIOSSLContext, String?)
+            }
+            let base: Base
+
+            /// Disables TLS for the connection.
+            ///
+            /// Use this option when connecting to a MQTT broker that doesn't require encryption.
+            public static var disable: Self { .init(base: .disable) }
+
+            /// Enables TLS for the connection.
+            ///
+            /// - Parameters:
+            ///   - sslContext: The SSL context used to establish the secure connection
+            ///   - tlsServerName: Optional server name for SNI (Server Name Indication)
+            /// - Returns: A configured TLS instance
+            public static func enable(_ sslContext: NIOSSLContext, tlsServerName: String?) throws -> Self {
+                .init(base: .enable(sslContext, tlsServerName))
+            }
+        }
+
+        /// TLS configuration for the connection.
+        ///
+        /// Use `.disable` for unencrypted connections or `.enable(...)` for secure connections.
+        public var tls: TLS
+
         /// Initialize MQTTClient configuration struct
         /// - Parameters:
         ///   - version: Version of MQTT server client is connecting to
+        ///   - tls: TLS configuration for the connection
         ///   - disablePing: Disable the automatic sending of pingreq messages
         ///   - keepAliveInterval: MQTT keep alive period.
         ///   - pingInterval: Override calculated interval between each pingreq message
@@ -83,6 +116,7 @@ extension MQTTClient {
         ///   - webSocketConfiguration: Set this if you want to use WebSockets
         public init(
             version: Version = .v3_1_1,
+            tls: TLS = .disable,
             disablePing: Bool = false,
             keepAliveInterval: TimeAmount = .seconds(90),
             pingInterval: TimeAmount? = nil,
@@ -96,6 +130,7 @@ extension MQTTClient {
             webSocketConfiguration: WebSocketConfiguration
         ) {
             self.version = version
+            self.tls = tls
             self.disablePing = disablePing
             self.keepAliveInterval = keepAliveInterval
             self.pingInterval = pingInterval
@@ -112,6 +147,7 @@ extension MQTTClient {
         /// Initialize MQTTClient configuration struct
         /// - Parameters:
         ///   - version: Version of MQTT server client is connecting to
+        ///   - tls: TLS configuration for the connection
         ///   - disablePing: Disable the automatic sending of pingreq messages
         ///   - keepAliveInterval: MQTT keep alive period.
         ///   - pingInterval: Override calculated interval between each pingreq message
@@ -127,6 +163,7 @@ extension MQTTClient {
         ///   - webSocketMaxFrameSize: Maximum frame size for a web socket connection
         public init(
             version: Version = .v3_1_1,
+            tls: TLS = .disable,
             disablePing: Bool = false,
             keepAliveInterval: TimeAmount = .seconds(90),
             pingInterval: TimeAmount? = nil,
@@ -142,59 +179,7 @@ extension MQTTClient {
             webSocketMaxFrameSize: Int = 1 << 14
         ) {
             self.version = version
-            self.disablePing = disablePing
-            self.keepAliveInterval = keepAliveInterval
-            self.pingInterval = pingInterval
-            self.connectTimeout = connectTimeout
-            self.timeout = timeout
-            self.userName = userName
-            self.password = password
-            self.useSSL = useSSL
-            self.tlsConfiguration = tlsConfiguration
-            self.sniServerName = sniServerName
-            if useWebSockets {
-                self.webSocketConfiguration = .init(urlPath: webSocketURLPath ?? "/mqtt", maxFrameSize: webSocketMaxFrameSize)
-            } else {
-                self.webSocketConfiguration = nil
-            }
-        }
-
-        /// Initialize MQTTClient configuration struct
-        /// - Parameters:
-        ///   - version: Version of MQTT server client is connecting to
-        ///   - disablePing: Disable the automatic sending of pingreq messages
-        ///   - keepAliveInterval: MQTT keep alive period.
-        ///   - pingInterval: Override calculated interval between each pingreq message
-        ///   - connectTimeout: Timeout for connecting to server
-        ///   - timeout: Timeout for server ACK responses
-        ///   - maxRetryAttempts: Max number of times to send a message. This is deprecated
-        ///   - userName: MQTT user name
-        ///   - password: MQTT password
-        ///   - useSSL: Use encrypted connection to server
-        ///   - useWebSockets: Use a websocket connection to server
-        ///   - tlsConfiguration: TLS configuration, for SSL connection
-        ///   - sniServerName: Server name used by TLS. This will default to host name if not set
-        ///   - webSocketURLPath: URL Path for web socket. Defaults to "/mqtt"
-        ///   - webSocketMaxFrameSize: Maximum frame size for a web socket connection
-        @available(*, deprecated, message: "maxRetryAttempts is no longer used")
-        public init(
-            version: Version = .v3_1_1,
-            disablePing: Bool = false,
-            keepAliveInterval: TimeAmount = .seconds(90),
-            pingInterval: TimeAmount? = nil,
-            connectTimeout: TimeAmount = .seconds(10),
-            timeout: TimeAmount? = nil,
-            maxRetryAttempts: Int,
-            userName: String? = nil,
-            password: String? = nil,
-            useSSL: Bool = false,
-            useWebSockets: Bool = false,
-            tlsConfiguration: TLSConfigurationType? = nil,
-            sniServerName: String? = nil,
-            webSocketURLPath: String? = nil,
-            webSocketMaxFrameSize: Int = 1 << 14
-        ) {
-            self.version = version
+            self.tls = tls
             self.disablePing = disablePing
             self.keepAliveInterval = keepAliveInterval
             self.pingInterval = pingInterval
@@ -234,7 +219,7 @@ extension MQTTClient {
         /// MQTT keep alive period.
         public let keepAliveInterval: TimeAmount
         /// override interval between each pingreq message
-        public let pingInterval: TimeAmount?
+        public var pingInterval: TimeAmount?
         /// timeout for connecting to server
         public let connectTimeout: TimeAmount
         /// timeout for server response

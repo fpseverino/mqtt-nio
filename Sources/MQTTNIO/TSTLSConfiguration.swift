@@ -20,7 +20,7 @@ import NIOSSL
 #endif
 
 /// TLS Version enumeration
-public enum TSTLSVersion {
+public enum TSTLSVersion: Sendable {
     case tlsV10
     case tlsV11
     case tlsV12
@@ -75,7 +75,7 @@ extension tls_protocol_version_t {
 }
 
 /// Certificate verification modes.
-public enum TSCertificateVerification {
+public enum TSCertificateVerification: Sendable {
     /// All certificate verification disabled.
     case none
 
@@ -85,7 +85,7 @@ public enum TSCertificateVerification {
 }
 
 /// TLS configuration for NIO Transport Services
-public struct TSTLSConfiguration {
+public struct TSTLSConfiguration: Sendable {
     /// Error loading TLS files
     public enum Error: Swift.Error {
         case invalidData

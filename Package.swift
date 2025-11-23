@@ -4,7 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "mqtt-nio",
-    platforms: [.macOS(.v10_15), .iOS(.v13), .tvOS(.v13), .watchOS(.v7)],
+    platforms: [.macOS(.v15), .iOS(.v18), .tvOS(.v18), .watchOS(.v11)],
     products: [
         .library(name: "MQTTNIO", targets: ["MQTTNIO"])
     ],
