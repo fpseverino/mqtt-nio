@@ -183,6 +183,7 @@ struct MQTTNewConnectionTests {
         }
     }
 
+    #if os(macOS)
     @Test("Connect with Raw IP Address")
     func rawIPConnect() async throws {
         try await MQTTNewConnection.withConnection(
@@ -193,6 +194,7 @@ struct MQTTNewConnectionTests {
             try await connection.ping()
         }
     }
+    #endif
 
     @Test("Packet ID")
     func packetID() async throws {
