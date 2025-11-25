@@ -127,6 +127,30 @@ struct MQTTNewConnectionTests {
         }
     }
 
+    #if canImport(Network)
+    @Test("Connect with TLS from P12")
+    func tlsConnectFromP12() async throws {
+        try await MQTTNewConnection.withConnection(
+            address: .hostname(MQTTNIOTests.hostname, port: 8883),
+            configuration: .init(
+                useSSL: true,
+                tlsConfiguration: .ts(
+                    .init(
+                        trustRoots: .der(MQTTNIOTests.rootPath + "/mosquitto/certs/ca.der"),
+                        clientIdentity: .p12(filename: MQTTNIOTests.rootPath + "/mosquitto/certs/client.p12", password: "MQTTNIOClientCertPassword")
+                    )
+                ),
+                sniServerName: "soto.codes"
+            ),
+            identifier: "tlsConnectFromP12",
+            eventLoop: MQTTNIOTests.eventLoopGroupSingleton.any(),
+            logger: self.logger
+        ) { connection in
+            try await connection.ping()
+        }
+    }
+    #endif
+
     @Test("Connect with Unix Domain Socket")
     func unixDomainSocketConnect() async throws {
         try await MQTTNewConnection.withConnection(
