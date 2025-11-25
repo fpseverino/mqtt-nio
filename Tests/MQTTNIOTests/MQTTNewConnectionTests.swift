@@ -95,8 +95,13 @@ struct MQTTNewConnectionTests {
     func tlsConnect() async throws {
         try await MQTTNewConnection.withConnection(
             address: .hostname(MQTTNIOTests.hostname, port: 8883),
-            configuration: .init(tls: .enable(self.sslContext, tlsServerName: "soto.codes")),
+            configuration: .init(
+                useSSL: true,
+                tlsConfiguration: MQTTNIOTests.getTLSConfiguration(),
+                sniServerName: "soto.codes"
+            ),
             identifier: "tlsConnect",
+            eventLoop: MQTTNIOTests.eventLoopGroupSingleton.any(),
             logger: self.logger
         ) { connection in
             try await connection.ping()
@@ -108,10 +113,14 @@ struct MQTTNewConnectionTests {
         try await MQTTNewConnection.withConnection(
             address: .hostname(MQTTNIOTests.hostname, port: 8081),
             configuration: .init(
-                tls: .enable(self.sslContext, tlsServerName: "soto.codes"),
+                timeout: .seconds(5),
+                useSSL: true,
+                tlsConfiguration: MQTTNIOTests.getTLSConfiguration(),
+                sniServerName: "soto.codes",
                 webSocketConfiguration: .init()
             ),
             identifier: "webSocketAndTLSConnect",
+            eventLoop: MQTTNIOTests.eventLoopGroupSingleton.any(),
             logger: self.logger
         ) { connection in
             try await connection.ping()
@@ -267,20 +276,6 @@ struct MQTTNewConnectionTests {
         logger.logLevel = .trace
         return logger
     }()
-
-    var sslContext: NIOSSLContext {
-        get throws {
-            let rootCertificate = try NIOSSLCertificate.fromPEMFile(MQTTNIOTests.rootPath + "/mosquitto/certs/ca.pem")
-            let certificate = try NIOSSLCertificate.fromPEMFile(MQTTNIOTests.rootPath + "/mosquitto/certs/client.pem")
-            let privateKey = try NIOSSLPrivateKey(file: MQTTNIOTests.rootPath + "/mosquitto/certs/client.key", format: .pem)
-            var tlsConfiguration = TLSConfiguration.makeClientConfiguration()
-            tlsConfiguration.trustRoots = .certificates(rootCertificate)
-            tlsConfiguration.certificateChain = certificate.map { .certificate($0) }
-            tlsConfiguration.privateKey = .privateKey(privateKey)
-
-            return try NIOSSLContext(configuration: tlsConfiguration)
-        }
-    }
 }
 
 extension MQTTError: Equatable {

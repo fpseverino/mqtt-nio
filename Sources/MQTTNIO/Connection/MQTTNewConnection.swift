@@ -191,79 +191,74 @@ public final actor MQTTNewConnection: Sendable {
     ) -> EventLoopFuture<MQTTNewConnection> {
         eventLoop.assertInEventLoop()
 
-        let bootstrap: any NIOClientTCPBootstrapProtocol
-        #if canImport(Network)
-        if let tsBootstrap = createTSBootstrap(eventLoopGroup: eventLoop, tlsOptions: nil) {
-            bootstrap = tsBootstrap
-        } else {
-            #if os(iOS) || os(tvOS)
-            self.logger.warning(
-                "Running BSD sockets on iOS or tvOS is not recommended. Please use NIOTSEventLoopGroup, to run with the Network framework"
-            )
-            #endif
-            bootstrap = self.createSocketsBootstrap(eventLoopGroup: eventLoop)
-        }
-        #else
-        bootstrap = self.createSocketsBootstrap(eventLoopGroup: eventLoop)
-        #endif
+        let host =
+            switch address.value {
+            case .hostname(let hostname, _):
+                hostname
+            case .unixDomainSocket(let path):
+                path
+            }
 
         let channelPromise = eventLoop.makePromise(of: (any Channel).self)
-        let connect =
-            bootstrap
-            .channelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
-            .channelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
-            .connectTimeout(configuration.connectTimeout)
-            .channelInitializer { channel in
-                do {
-                    // are we using websockets
-                    if let webSocketConfiguration = configuration.webSocketConfiguration {
-                        // prepare for websockets and on upgrade add handlers
-                        let promise = eventLoop.makePromise(of: Void.self)
-                        promise.futureResult.map { _ in channel }
-                            .cascade(to: channelPromise)
+        do {
+            let connect = try Self.getBootstrap(configuration: configuration, eventLoopGroup: eventLoop, host: host)
+                .channelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
+                .channelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
+                .connectTimeout(configuration.connectTimeout)
+                .channelInitializer { channel in
+                    do {
+                        // are we using websockets
+                        if let webSocketConfiguration = configuration.webSocketConfiguration {
+                            // prepare for websockets and on upgrade add handlers
+                            let promise = eventLoop.makePromise(of: Void.self)
+                            promise.futureResult.map { _ in channel }
+                                .cascade(to: channelPromise)
 
-                        return Self._setupChannelForWebSockets(
-                            channel,
-                            address: address,
-                            configuration: configuration,
-                            webSocketConfiguration: webSocketConfiguration,
-                            upgradePromise: promise
-                        ) {
-                            try self._setupChannel(channel, configuration: configuration, logger: logger, skipTLS: true)
+                            return Self._setupChannelForWebSockets(
+                                channel,
+                                address: address,
+                                configuration: configuration,
+                                webSocketConfiguration: webSocketConfiguration,
+                                upgradePromise: promise
+                            ) {
+                                try self._setupChannel(channel, configuration: configuration, logger: logger)
+                            }
+                        } else {
+                            try self._setupChannel(channel, configuration: configuration, logger: logger)
                         }
-                    } else {
-                        try self._setupChannel(channel, configuration: configuration, logger: logger)
+                        return eventLoop.makeSucceededVoidFuture()
+                    } catch {
+                        channelPromise.fail(error)
+                        return eventLoop.makeFailedFuture(error)
                     }
-                    return eventLoop.makeSucceededVoidFuture()
-                } catch {
-                    channelPromise.fail(error)
-                    return eventLoop.makeFailedFuture(error)
+                }
+
+            let future: EventLoopFuture<any Channel>
+            switch address.value {
+            case .hostname(let host, let port):
+                future = connect.connect(host: host, port: port)
+                future.whenSuccess { _ in
+                    logger.debug("Client connected to \(host):\(port)")
+                }
+            case .unixDomainSocket(let path):
+                future = connect.connect(unixDomainSocketPath: path)
+                future.whenSuccess { _ in
+                    logger.debug("Client connected to socket path \(path)")
                 }
             }
 
-        let future: EventLoopFuture<any Channel>
-        switch address.value {
-        case .hostname(let host, let port):
-            future = connect.connect(host: host, port: port)
-            future.whenSuccess { _ in
-                logger.debug("Client connected to \(host):\(port)")
+            // For non-WebSocket connections, succeed the promise immediately
+            // For WebSocket connections, the promise is resolved after upgrade completes
+            if !configuration.useWebSockets {
+                future.map { channel in
+                    channelPromise.succeed(channel)
+                }
+                .cascadeFailure(to: channelPromise)
+            } else {
+                future.cascadeFailure(to: channelPromise)
             }
-        case .unixDomainSocket(let path):
-            future = connect.connect(unixDomainSocketPath: path)
-            future.whenSuccess { _ in
-                logger.debug("Client connected to socket path \(path)")
-            }
-        }
-
-        // For non-WebSocket connections, succeed the promise immediately
-        // For WebSocket connections, the promise is resolved after upgrade completes
-        if !configuration.useWebSockets {
-            future.map { channel in
-                channelPromise.succeed(channel)
-            }
-            .cascadeFailure(to: channelPromise)
-        } else {
-            future.cascadeFailure(to: channelPromise)
+        } catch {
+            channelPromise.fail(error)
         }
 
         return channelPromise.futureResult.flatMapThrowing { channel in
@@ -309,7 +304,6 @@ public final actor MQTTNewConnection: Sendable {
 
     private static func _setupChannelAndConnect(
         _ channel: any Channel,
-        tlsSetting: TLSSetting = .disable,
         configuration: MQTTClient.Configuration,
         cleanSession: Bool,
         identifier: String,
@@ -338,58 +332,77 @@ public final actor MQTTNewConnection: Sendable {
         }
     }
 
-    @usableFromInline
-    enum TLSSetting {
-        case enable(NIOSSLContext, serverName: String?)
-        case disable
-    }
-
     @discardableResult
     private static func _setupChannel(
         _ channel: any Channel,
         configuration: MQTTClient.Configuration,
-        logger: Logger,
-        skipTLS: Bool = false
+        logger: Logger
     ) throws -> MQTTChannelHandler {
         channel.eventLoop.assertInEventLoop()
-        let sync = channel.pipeline.syncOperations
-        if !skipTLS {
-            switch configuration.tls.base {
-            case .enable(let sslContext, let tlsServerName):
-                try sync.addHandler(NIOSSLClientHandler(context: sslContext, serverHostname: tlsServerName))
-            case .disable:
-                break
-            }
-        }
         let mqttChannelHandler = MQTTChannelHandler(
             configuration: .init(configuration),
             eventLoop: channel.eventLoop,
             logger: logger,
             publishListeners: MQTTListeners<Result<MQTTPublishInfo, any Error>>()
         )
-        try sync.addHandler(mqttChannelHandler)
+        try channel.pipeline.syncOperations.addHandler(mqttChannelHandler)
         return mqttChannelHandler
     }
 
-    /// create a BSD sockets based bootstrap
-    private static func createSocketsBootstrap(eventLoopGroup: any EventLoopGroup) -> ClientBootstrap {
-        ClientBootstrap(group: eventLoopGroup)
-    }
+    private static func getBootstrap(
+        configuration: MQTTClient.Configuration,
+        eventLoopGroup: any EventLoopGroup,
+        host: String
+    ) throws -> NIOClientTCPBootstrap {
+        var bootstrap: NIOClientTCPBootstrap
+        let serverName = configuration.sniServerName ?? host
+        #if canImport(Network)
+        // if eventLoop is compatible with NIOTransportServices create a NIOTSConnectionBootstrap
+        if let tsBootstrap = NIOTSConnectionBootstrap(validatingGroup: eventLoopGroup) {
+            // create NIOClientTCPBootstrap with NIOTS TLS provider
+            let options: NWProtocolTLS.Options
+            switch configuration.tlsConfiguration {
+            case .ts(let config):
+                options = try config.getNWProtocolTLSOptions()
+            #if os(macOS) || os(Linux)
+            case .niossl:
+                throw MQTTError.wrongTLSConfig
+            #endif
+            default:
+                options = NWProtocolTLS.Options()
+            }
+            sec_protocol_options_set_tls_server_name(options.securityProtocolOptions, serverName)
+            let tlsProvider = NIOTSClientTLSProvider(tlsOptions: options)
+            bootstrap = NIOClientTCPBootstrap(tsBootstrap, tls: tlsProvider)
+            if configuration.useSSL {
+                return bootstrap.enableTLS()
+            }
+            return bootstrap
+        }
+        #endif
 
-    #if canImport(Network)
-    /// create a NIOTransportServices bootstrap using Network.framework
-    private static func createTSBootstrap(eventLoopGroup: any EventLoopGroup, tlsOptions: NWProtocolTLS.Options?) -> NIOTSConnectionBootstrap? {
-        guard
-            let bootstrap = NIOTSConnectionBootstrap(validatingGroup: eventLoopGroup)
-        else {
-            return nil
+        #if os(macOS) || os(Linux)
+        if let clientBootstrap = ClientBootstrap(validatingGroup: eventLoopGroup) {
+            let tlsConfiguration: TLSConfiguration
+            switch configuration.tlsConfiguration {
+            case .niossl(let config):
+                tlsConfiguration = config
+            default:
+                tlsConfiguration = TLSConfiguration.makeClientConfiguration()
+            }
+            if configuration.useSSL {
+                let sslContext = try NIOSSLContext(configuration: tlsConfiguration)
+                let tlsProvider = try NIOSSLClientTLSProvider<ClientBootstrap>(context: sslContext, serverHostname: serverName)
+                bootstrap = NIOClientTCPBootstrap(clientBootstrap, tls: tlsProvider)
+                return bootstrap.enableTLS()
+            } else {
+                bootstrap = NIOClientTCPBootstrap(clientBootstrap, tls: NIOInsecureNoTLS())
+            }
+            return bootstrap
         }
-        if let tlsOptions {
-            return bootstrap.tlsOptions(tlsOptions)
-        }
-        return bootstrap
+        #endif
+        preconditionFailure("Cannot create bootstrap for the supplied EventLoop")
     }
-    #endif
 
     private static func _setupChannelForWebSockets(
         _ channel: any Channel,
@@ -399,68 +412,50 @@ public final actor MQTTNewConnection: Sendable {
         upgradePromise promise: EventLoopPromise<Void>,
         afterHandlerAdded: @escaping () throws -> Void
     ) -> EventLoopFuture<Void> {
-        let sniServerName: String? =
-            if case .enable(_, let serverName) = configuration.tls.base {
-                serverName
-            } else {
-                nil
-            }
-
         var hostHeader: String {
-            switch (configuration.tls.base, address.value) {
-            case (.enable, .hostname(let host, let port)) where port != 443:
+            switch (configuration.useSSL, address.value) {
+            case (true, .hostname(let host, let port)) where port != 443:
                 return "\(host):\(port)"
-            case (.disable, .hostname(let host, let port)) where port != 80:
+            case (false, .hostname(let host, let port)) where port != 80:
                 return "\(host):\(port)"
-            case (.enable, .hostname(let host, _)), (.disable, .hostname(let host, _)):
+            case (true, .hostname(let host, _)), (false, .hostname(let host, _)):
                 return host
-            case (.enable, .unixDomainSocket(let path)), (.disable, .unixDomainSocket(let path)):
+            case (true, .unixDomainSocket(let path)), (false, .unixDomainSocket(let path)):
                 return path
             }
         }
 
-        // Add TLS handler first if needed (must be before HTTP handlers)
-        let tlsSetupFuture: EventLoopFuture<Void>
-        switch configuration.tls.base {
-        case .enable(let sslContext, let tlsServerName):
-            tlsSetupFuture = channel.eventLoop.makeCompletedFuture {
-                try channel.pipeline.syncOperations.addHandler(NIOSSLClientHandler(context: sslContext, serverHostname: tlsServerName))
-            }
-        case .disable:
-            tlsSetupFuture = channel.eventLoop.makeSucceededVoidFuture()
-        }
-
         // initial HTTP request handler, before upgrade
         let httpHandler = WebSocketInitialRequestHandler(
-            host: sniServerName ?? hostHeader,
+            host: configuration.sniServerName ?? hostHeader,
             urlPath: webSocketConfiguration.urlPath,
             additionalHeaders: webSocketConfiguration.initialRequestHeaders,
             upgradePromise: promise
         )
-        // add HTTP handler with web socket upgrade (after TLS if needed)
-        return tlsSetupFuture.flatMap {
-            // create upgrader and upgrade configuration inside closure to avoid capturing non-Sendable values
-            let requestKey = (0..<16).map { _ in UInt8.random(in: .min ..< .max) }
-            let websocketUpgrader = NIOWebSocketClientUpgrader(
-                requestKey: Data(requestKey).base64EncodedString(),
-                maxFrameSize: configuration.webSocketMaxFrameSize
-            ) { channel, _ in
-                let future = channel.eventLoop.makeCompletedFuture {
-                    try channel.pipeline.syncOperations.addHandler(WebSocketHandler())
-                    try afterHandlerAdded()
-                }
-                future.cascade(to: promise)
-                return future
+
+        // create random key for request key
+        let requestKey = (0..<16).map { _ in UInt8.random(in: .min ..< .max) }
+        let websocketUpgrader = NIOWebSocketClientUpgrader(
+            requestKey: Data(requestKey).base64EncodedString(),
+            maxFrameSize: configuration.webSocketMaxFrameSize
+        ) { channel, _ in
+            let future = channel.eventLoop.makeCompletedFuture {
+                try channel.pipeline.syncOperations.addHandler(WebSocketHandler())
+                try afterHandlerAdded()
             }
-            let upgradeConfig: NIOHTTPClientUpgradeConfiguration = (
-                upgraders: [websocketUpgrader],
-                completionHandler: { _ in
-                    channel.pipeline.removeHandler(httpHandler, promise: nil)
-                }
-            )
-            return channel.pipeline.addHTTPClientHandlers(withClientUpgrade: upgradeConfig).flatMap {
-                channel.pipeline.addHandler(httpHandler)
+            future.cascade(to: promise)
+            return future
+        }
+        let upgradeConfig: NIOHTTPClientUpgradeConfiguration = (
+            upgraders: [websocketUpgrader],
+            completionHandler: { _ in
+                channel.pipeline.removeHandler(httpHandler, promise: nil)
             }
+        )
+
+        // add HTTP handler with web socket upgrade
+        return channel.pipeline.addHTTPClientHandlers(withClientUpgrade: upgradeConfig).flatMap {
+            channel.pipeline.addHandler(httpHandler)
         }
     }
 
