@@ -275,63 +275,6 @@ public final actor MQTTNewConnection: Sendable {
         }
     }
 
-    package static func setupChannelAndConnect(
-        _ channel: any Channel,
-        configuration: MQTTClient.Configuration = .init(),
-        cleanSession: Bool = true,
-        identifier: String,
-        logger: Logger
-    ) async throws -> MQTTNewConnection {
-        if !channel.eventLoop.inEventLoop {
-            return try await channel.eventLoop.flatSubmit {
-                self._setupChannelAndConnect(
-                    channel,
-                    configuration: configuration,
-                    cleanSession: cleanSession,
-                    identifier: identifier,
-                    logger: logger
-                )
-            }.get()
-        }
-        return try await self._setupChannelAndConnect(
-            channel,
-            configuration: configuration,
-            cleanSession: cleanSession,
-            identifier: identifier,
-            logger: logger
-        ).get()
-    }
-
-    private static func _setupChannelAndConnect(
-        _ channel: any Channel,
-        configuration: MQTTClient.Configuration,
-        cleanSession: Bool,
-        identifier: String,
-        logger: Logger
-    ) -> EventLoopFuture<MQTTNewConnection> {
-        do {
-            let handler = try self._setupChannel(
-                channel,
-                configuration: configuration,
-                logger: logger
-            )
-            let connection = MQTTNewConnection(
-                channel: channel,
-                channelHandler: handler,
-                configuration: configuration,
-                cleanSession: cleanSession,
-                identifier: identifier,
-                address: .hostname("127.0.0.1", port: 1883),
-                logger: logger
-            )
-            return channel.connect(to: try SocketAddress(ipAddress: "127.0.0.1", port: 1883)).map {
-                connection
-            }
-        } catch {
-            return channel.eventLoop.makeFailedFuture(error)
-        }
-    }
-
     @discardableResult
     private static func _setupChannel(
         _ channel: any Channel,
