@@ -12,7 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 /// A MQTT broker address to connect to.
-public struct MQTTBrokerAddress: Sendable, Equatable, Hashable {
+public struct MQTTServerAddress: Sendable, Equatable, Hashable {
     enum _Internal: Equatable, Hashable {
         case hostname(_ host: String, port: Int)
         case unixDomainSocket(path: String)
