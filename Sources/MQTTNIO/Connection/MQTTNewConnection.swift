@@ -52,7 +52,7 @@ public final actor MQTTNewConnection: Sendable {
         configuration: MQTTClient.Configuration,
         cleanSession: Bool,
         identifier: String,
-        address: MQTTBrokerAddress?,
+        address: MQTTServerAddress?,
         logger: Logger
     ) {
         self.unownedExecutor = channel.eventLoop.executor.asUnownedSerialExecutor()
@@ -67,7 +67,7 @@ public final actor MQTTNewConnection: Sendable {
     }
 
     public static func withConnection<Value>(
-        address: MQTTBrokerAddress,
+        address: MQTTServerAddress,
         configuration: MQTTClient.Configuration = .init(),
         identifier: String,
         cleanSession: Bool = true,
@@ -91,7 +91,7 @@ public final actor MQTTNewConnection: Sendable {
     }
 
     private static func connect(
-        address: MQTTBrokerAddress,
+        address: MQTTServerAddress,
         identifier: String,
         cleanSession: Bool,
         will: (topicName: String, payload: ByteBuffer, qos: MQTTQoS, retain: Bool)? = nil,
@@ -182,7 +182,7 @@ public final actor MQTTNewConnection: Sendable {
     }
 
     private static func _makeConnection(
-        address: MQTTBrokerAddress,
+        address: MQTTServerAddress,
         configuration: MQTTClient.Configuration,
         cleanSession: Bool,
         identifier: String,
@@ -349,7 +349,7 @@ public final actor MQTTNewConnection: Sendable {
 
     private static func _setupChannelForWebSockets(
         _ channel: any Channel,
-        address: MQTTBrokerAddress,
+        address: MQTTServerAddress,
         configuration: MQTTClient.Configuration,
         webSocketConfiguration: MQTTClient.WebSocketConfiguration,
         upgradePromise promise: EventLoopPromise<Void>,
