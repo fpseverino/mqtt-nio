@@ -27,7 +27,7 @@ import NIOTransportServices
 import NIOSSL
 #endif
 
-@Suite("MQTTNewConnection Tests", .serialized)
+@Suite("MQTTNewConnection Tests")
 struct MQTTNewConnectionTests {
     @Test("Connect with Will")
     func connectWithWill() async throws {
