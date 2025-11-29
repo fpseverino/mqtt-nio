@@ -244,8 +244,6 @@ public final actor MQTTNewConnection: Sendable {
         let channelPromise = eventLoop.makePromise(of: (any Channel).self)
         do {
             let connect = try Self._getBootstrap(configuration: configuration, eventLoopGroup: eventLoop, host: host)
-                .channelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
-                .channelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
                 .connectTimeout(configuration.connectTimeout)
                 .channelInitializer { channel in
                     do {

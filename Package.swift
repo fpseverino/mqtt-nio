@@ -9,11 +9,11 @@ let package = Package(
         .library(name: "MQTTNIO", targets: ["MQTTNIO"])
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-atomics.git", from: "1.0.0"),
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
-        .package(url: "https://github.com/apple/swift-nio.git", from: "2.80.0"),
-        .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.14.0"),
-        .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.25.1"),
+        .package(url: "https://github.com/apple/swift-atomics.git", from: "1.3.0"),
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.6.4"),
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.90.1"),
+        .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.36.0"),
+        .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.26.0"),
         .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.0.0"),
     ],
     targets: [
