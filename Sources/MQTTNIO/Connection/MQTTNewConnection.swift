@@ -33,13 +33,14 @@ import NIOSSL
 public final actor MQTTNewConnection: Sendable {
     nonisolated public let unownedExecutor: UnownedSerialExecutor
 
+    /// Client identifier
     public private(set) var identifier: String
     let logger: Logger
     let channel: any Channel
     let channelHandler: MQTTChannelHandler
     let configuration: MQTTClient.Configuration
     let globalPacketId = Atomic<UInt16>(1)
-    /// inflight messages
+    /// Inflight messages
     private var inflight: MQTTInflight
     let isClosed: Atomic<Bool>
 
@@ -66,6 +67,19 @@ public final actor MQTTNewConnection: Sendable {
         self.isClosed = .init(false)
     }
 
+    /// Connect to MQTT server and run operations using the connection and then close it.
+    ///
+    /// - Parameters:
+    ///   - address: Internet address of the MQTT server.
+    ///   - configuration: Configuration of the MQTT connection.
+    ///   - identifier: Client identifier for the broker. This must be unique.
+    ///   - cleanSession: Whether to start a clean session.
+    ///   - will: PUBLISH message to be posted as soon as connection is made.
+    ///   - eventLoop: EventLoop to run the connection on.
+    ///   - logger: Logger to use for the connection.
+    ///   - isolation: Actor isolation.
+    ///   - operation: Closure handling the MQTT connection.
+    /// - Returns: Value returned from the operation closure.
     public static func withConnection<Value>(
         address: MQTTServerAddress,
         configuration: MQTTClient.Configuration = .init(),
@@ -88,6 +102,38 @@ public final actor MQTTNewConnection: Sendable {
         )
         defer { connection.close() }
         return try await operation(connection)
+    }
+
+    /// Publish message to topic
+    /// - Parameters:
+    ///     - topicName: Topic name on which the message is published.
+    ///     - payload: Message payload.
+    ///     - qos: Quality of Service for message.
+    ///     - retain: Whether this is a retained message.
+    ///     - properties: MQTT v5 properties for the PUBLISH message.
+    public func publish(
+        to topicName: String,
+        payload: ByteBuffer,
+        qos: MQTTQoS,
+        retain: Bool = false,
+        properties: MQTTProperties = .init()
+    ) async throws {
+        let info = MQTTPublishInfo(qos: qos, retain: retain, dup: false, topicName: topicName, payload: payload, properties: properties)
+        let packetId = self.updatePacketId()
+        let packet = MQTTPublishPacket(publish: info, packetId: packetId)
+        _ = try await self.publish(packet: packet)
+    }
+
+    /// Ping the server to test if it is still alive and to tell it you are alive.
+    ///
+    /// You shouldn't need to call this as the `MQTTClient` automatically sends PINGREQ messages to the server to ensure
+    /// the connection is still live. If you initialize the client with the configuration `disablePingReq: true` then these
+    /// are disabled and it is up to you to send the PINGREQ messages yourself
+    public func ping() async throws {
+        _ = try await self.sendMessage(MQTTPingreqPacket()) { message in
+            guard message.type == .PINGRESP else { return false }
+            return true
+        }
     }
 
     private static func connect(
@@ -162,7 +208,7 @@ public final actor MQTTNewConnection: Sendable {
                 }
             }
         let connection = try await future.get()
-        try await connection.waitOnInitialized()
+        try await connection.channelHandler.waitOnInitialized().get()
         _ = try await connection._connect(packet: packet)
         return connection
     }
@@ -175,10 +221,6 @@ public final actor MQTTNewConnection: Sendable {
         }
         _ = self.channel.writeAndFlush(MQTTDisconnectPacket())
         self.channel.close(mode: .all, promise: nil)
-    }
-
-    private func waitOnInitialized() async throws {
-        try await self.channelHandler.waitOnInitialized().get()
     }
 
     private static func _makeConnection(
@@ -201,7 +243,7 @@ public final actor MQTTNewConnection: Sendable {
 
         let channelPromise = eventLoop.makePromise(of: (any Channel).self)
         do {
-            let connect = try Self.getBootstrap(configuration: configuration, eventLoopGroup: eventLoop, host: host)
+            let connect = try Self._getBootstrap(configuration: configuration, eventLoopGroup: eventLoop, host: host)
                 .channelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
                 .channelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
                 .connectTimeout(configuration.connectTimeout)
@@ -292,7 +334,7 @@ public final actor MQTTNewConnection: Sendable {
         return mqttChannelHandler
     }
 
-    private static func getBootstrap(
+    private static func _getBootstrap(
         configuration: MQTTClient.Configuration,
         eventLoopGroup: any EventLoopGroup,
         host: String
@@ -434,6 +476,15 @@ public final actor MQTTNewConnection: Sendable {
         }
     }
 
+    func sendMessage(
+        _ message: any MQTTPacket,
+        checkInbound: @escaping (MQTTPacket) throws -> Bool
+    ) async throws -> MQTTPacket {
+        try await withCheckedThrowingContinuation { continuation in
+            self.channelHandler.sendMessage(message, promise: .swift(continuation), checkInbound: checkInbound)
+        }
+    }
+
     /// Resend PUBLISH and PUBREL messages
     func resendOnRestart() async throws {
         let inflight = self.inflight.packets
@@ -481,7 +532,7 @@ public final actor MQTTNewConnection: Sendable {
             // alter pingreq interval based on session expiry returned from server
             if case .serverKeepAlive(let keepAliveInterval) = property {
                 let pingTimeout = TimeAmount.seconds(max(Int64(keepAliveInterval - 5), 5))
-                self.updatePingreqTimeout(pingTimeout)
+                self.channelHandler.updatePingreqTimeout(pingTimeout)
             }
             // client identifier
             if case .assignedClientIdentifier(let identifier) = property {
@@ -535,23 +586,6 @@ public final actor MQTTNewConnection: Sendable {
         }
     }
 
-    func updatePingreqTimeout(_ timeout: TimeAmount) {
-        self.channelHandler.updatePingreqTimeout(timeout)
-    }
-
-    func sendMessage(
-        _ message: any MQTTPacket,
-        checkInbound: @escaping (MQTTPacket) throws -> Bool
-    ) async throws -> MQTTPacket {
-        try await withCheckedThrowingContinuation { continuation in
-            self.channelHandler.sendMessage(message, promise: .swift(continuation), checkInbound: checkInbound)
-        }
-    }
-
-    func sendMessageNoWait(_ message: any MQTTPacket) {
-        _ = self.channel.writeAndFlush(message)
-    }
-
     /// Publish message to topic
     /// - Parameters:
     ///     - packet: Publish packet
@@ -583,7 +617,7 @@ public final actor MQTTNewConnection: Sendable {
 
         if packet.publish.qos == .atMostOnce {
             // don't send a packet id if QOS is at most once. (MQTT-2.3.1-5)
-            self.sendMessageNoWait(packet)
+            try await self.channel.writeAndFlush(packet)
             return nil
         }
 
@@ -644,48 +678,10 @@ public final actor MQTTNewConnection: Sendable {
             return true
         }
     }
-}
-
-extension MQTTNewConnection {
-    /// Publish message to topic
-    /// - Parameters:
-    ///     - topicName: Topic name on which the message is published
-    ///     - payload: Message payload
-    ///     - qos: Quality of Service for message.
-    ///     - retain: Whether this is a retained message.
-    public func publish(
-        to topicName: String,
-        payload: ByteBuffer,
-        qos: MQTTQoS,
-        retain: Bool = false,
-        properties: MQTTProperties = .init()
-    ) async throws {
-        let info = MQTTPublishInfo(qos: qos, retain: retain, dup: false, topicName: topicName, payload: payload, properties: properties)
-        let packetId = self.updatePacketId()
-        let packet = MQTTPublishPacket(publish: info, packetId: packetId)
-        _ = try await self.publish(packet: packet)
-    }
 
     func updatePacketId() -> UInt16 {
         let id = self.globalPacketId.wrappingAdd(1, ordering: .relaxed).newValue
-
         // packet id must be non-zero
-        if id == 0 {
-            return self.globalPacketId.wrappingAdd(1, ordering: .relaxed).newValue
-        } else {
-            return id
-        }
-    }
-
-    /// Ping the server to test if it is still alive and to tell it you are alive.
-    ///
-    /// You shouldn't need to call this as the `MQTTClient` automatically sends PINGREQ messages to the server to ensure
-    /// the connection is still live. If you initialize the client with the configuration `disablePingReq: true` then these
-    /// are disabled and it is up to you to send the PINGREQ messages yourself
-    public func ping() async throws {
-        _ = try await self.sendMessage(MQTTPingreqPacket()) { message in
-            guard message.type == .PINGRESP else { return false }
-            return true
-        }
+        return id == 0 ? self.globalPacketId.wrappingAdd(1, ordering: .relaxed).newValue : id
     }
 }
