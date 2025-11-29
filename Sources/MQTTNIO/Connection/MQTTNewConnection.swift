@@ -91,6 +91,21 @@ public final actor MQTTNewConnection: Sendable {
         isolation: isolated (any Actor)? = #isolation,
         operation: (MQTTNewConnection) async throws -> sending Value
     ) async throws -> sending Value {
+        let host =
+            switch address.value {
+            case .hostname(let hostname, _):
+                hostname
+            case .unixDomainSocket(let path):
+                path
+            }
+        let port =
+            switch address.value {
+            case .hostname(_, let port):
+                String(port)
+            case .unixDomainSocket:
+                ""
+            }
+        logger.debug("Client connecting to \(host):\(port)")
         let connection = try await self.connect(
             address: address,
             identifier: identifier,
