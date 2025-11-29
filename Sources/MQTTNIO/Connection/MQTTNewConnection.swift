@@ -248,6 +248,7 @@ public final actor MQTTNewConnection: Sendable {
                 .connectTimeout(configuration.connectTimeout)
                 .channelInitializer { channel in
                     do {
+                        logger.debug("❌ In channelInitializer")
                         // are we using websockets
                         if let webSocketConfiguration = configuration.webSocketConfiguration {
                             // prepare for websockets and on upgrade add handlers
@@ -267,14 +268,18 @@ public final actor MQTTNewConnection: Sendable {
                         } else {
                             try self._setupChannel(channel, configuration: configuration, logger: logger)
                         }
+                        logger.debug("❌ After channelInitializer")
                         return eventLoop.makeSucceededVoidFuture()
                     } catch {
+                        logger.debug("❌ Error in channelInitializer: \(error)")
                         channelPromise.fail(error)
                         return eventLoop.makeFailedFuture(error)
                     }
                 }
 
             logger.debug("❌ After _getBootstrap")
+
+            logger.debug("Client connecting to \(address)")
 
             let future: EventLoopFuture<any Channel>
             switch address.value {
