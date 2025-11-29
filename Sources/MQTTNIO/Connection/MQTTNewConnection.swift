@@ -543,7 +543,9 @@ public final actor MQTTNewConnection: Sendable {
         _ message: any MQTTPacket,
         checkInbound: @escaping (MQTTPacket) throws -> Bool
     ) async throws -> MQTTPacket {
-        try await self.channelHandler.sendMessage(message, checkInbound: checkInbound)
+        try await withCheckedThrowingContinuation { continuation in
+            self.channelHandler.sendMessage(message, promise: .swift(continuation), checkInbound: checkInbound)
+        }
     }
 
     func sendMessageNoWait(_ message: any MQTTPacket) {

@@ -210,7 +210,7 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
 
     // MARK: - Sending Messages
 
-    private func _sendMessage(
+    func sendMessage(
         _ message: MQTTPacket,
         promise: MQTTPromise<MQTTPacket>,
         checkInbound: @escaping (MQTTPacket) throws -> Bool
@@ -229,29 +229,6 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
             _ = context.channel.writeAndFlush(message)
         case .throwError(let error):
             task.fail(error)
-        }
-    }
-
-    private func sendMessage(
-        _ message: MQTTPacket,
-        promise: MQTTPromise<MQTTPacket>,
-        checkInbound: @escaping (MQTTPacket) throws -> Bool
-    ) {
-        if self.eventLoop.inEventLoop {
-            self._sendMessage(message, promise: promise, checkInbound: checkInbound)
-        } else {
-            self.eventLoop.execute {
-                self._sendMessage(message, promise: promise, checkInbound: checkInbound)
-            }
-        }
-    }
-
-    func sendMessage(
-        _ message: MQTTPacket,
-        checkInbound: @escaping (MQTTPacket) throws -> Bool
-    ) async throws -> MQTTPacket {
-        try await withCheckedThrowingContinuation { continuation in
-            self.sendMessage(message, promise: .swift(continuation), checkInbound: checkInbound)
         }
     }
 
