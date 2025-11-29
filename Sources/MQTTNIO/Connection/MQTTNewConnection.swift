@@ -91,21 +91,6 @@ public final actor MQTTNewConnection: Sendable {
         isolation: isolated (any Actor)? = #isolation,
         operation: (MQTTNewConnection) async throws -> sending Value
     ) async throws -> sending Value {
-        let host =
-            switch address.value {
-            case .hostname(let hostname, _):
-                hostname
-            case .unixDomainSocket(let path):
-                path
-            }
-        let port =
-            switch address.value {
-            case .hostname(_, let port):
-                String(port)
-            case .unixDomainSocket:
-                ""
-            }
-        logger.debug("Client connecting to \(host):\(port)")
         let connection = try await self.connect(
             address: address,
             identifier: identifier,
@@ -258,6 +243,7 @@ public final actor MQTTNewConnection: Sendable {
 
         let channelPromise = eventLoop.makePromise(of: (any Channel).self)
         do {
+            logger.debug("❌ Before _getBootstrap")
             let connect = try Self._getBootstrap(configuration: configuration, eventLoopGroup: eventLoop, host: host)
                 .connectTimeout(configuration.connectTimeout)
                 .channelInitializer { channel in
@@ -287,6 +273,8 @@ public final actor MQTTNewConnection: Sendable {
                         return eventLoop.makeFailedFuture(error)
                     }
                 }
+
+            logger.debug("❌ After _getBootstrap")
 
             let future: EventLoopFuture<any Channel>
             switch address.value {
