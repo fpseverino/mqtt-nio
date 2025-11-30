@@ -156,6 +156,7 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
                 )
             }
         } catch {
+            self.logger.trace("✅✅✅ something went wrong in channelRead")
             self.failTasksAndClose(with: error)
             context.fireErrorCaught(error)
             context.close(promise: nil)
