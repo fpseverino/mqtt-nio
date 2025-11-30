@@ -303,7 +303,7 @@ struct MQTTNewConnectionTests {
         return logger
     }()
 
-    static let rootPath = #file
+    static let rootPath = #filePath
         .split(separator: "/", omittingEmptySubsequences: false)
         .dropLast(3)
         .joined(separator: "/")
@@ -317,10 +317,9 @@ struct MQTTNewConnectionTests {
         #endif
     }
 
-    static var _tlsConfiguration: Result<MQTTClient.TLSConfigurationType, Error> = {
-        do {
+    static var _tlsConfiguration: MQTTClient.TLSConfigurationType {
+        get throws {
             #if os(Linux)
-
             let rootCertificate = try NIOSSLCertificate.fromPEMFile(Self.rootPath + "/mosquitto/certs/ca.pem")
             let certificate = try NIOSSLCertificate.fromPEMFile(Self.rootPath + "/mosquitto/certs/client.pem")
             let privateKey = try NIOSSLPrivateKey(file: Self.rootPath + "/mosquitto/certs/client.key", format: .pem)
@@ -328,17 +327,16 @@ struct MQTTNewConnectionTests {
             tlsConfiguration.trustRoots = .certificates(rootCertificate)
             tlsConfiguration.certificateChain = certificate.map { .certificate($0) }
             tlsConfiguration.privateKey = .privateKey(privateKey)
-
-            return .success(.niossl(tlsConfiguration))
-
+            return .niossl(tlsConfiguration)
             #else
-
             let caData = try Data(contentsOf: URL(fileURLWithPath: Self.rootPath + "/mosquitto/certs/ca.der"))
             let trustRootCertificates = SecCertificateCreateWithData(nil, caData as CFData).map { [$0] }
             let p12Data = try Data(contentsOf: URL(fileURLWithPath: Self.rootPath + "/mosquitto/certs/client.p12"))
             let options: [String: String] = [kSecImportExportPassphrase as String: "MQTTNIOClientCertPassword"]
             var rawItems: CFArray?
-            let rt = SecPKCS12Import(p12Data as CFData, options as CFDictionary, &rawItems)
+            guard SecPKCS12Import(p12Data as CFData, options as CFDictionary, &rawItems) == errSecSuccess else {
+                throw MQTTError.wrongTLSConfig
+            }
             let items = rawItems! as! [[String: Any]]
             let firstItem = items[0]
             let identity = firstItem[kSecImportItemIdentity as String] as! SecIdentity?
@@ -346,38 +344,30 @@ struct MQTTNewConnectionTests {
                 trustRoots: trustRootCertificates,
                 clientIdentity: identity
             )
-            return .success(.ts(tlsConfiguration))
-
+            return .ts(tlsConfiguration)
             #endif
-        } catch {
-            return .failure(error)
         }
-    }()
+    }
 
     static func getTLSConfiguration(withTrustRoots: Bool = true, withClientKey: Bool = true) throws -> MQTTClient.TLSConfigurationType {
-        switch self._tlsConfiguration {
-        case .success(let config):
-            switch config {
-            #if os(macOS) || os(Linux)
-            case .niossl(let config):
-                var tlsConfig = TLSConfiguration.makeClientConfiguration()
-                tlsConfig.trustRoots = withTrustRoots == true ? (config.trustRoots ?? .default) : .default
-                tlsConfig.certificateChain = withClientKey ? config.certificateChain : []
-                tlsConfig.privateKey = withClientKey ? config.privateKey : nil
-                return .niossl(tlsConfig)
-            #endif
-            #if canImport(Network)
-            case .ts(let config):
-                return .ts(
-                    TSTLSConfiguration(
-                        trustRoots: withTrustRoots == true ? config.trustRoots : nil,
-                        clientIdentity: withClientKey == true ? config.clientIdentity : nil
-                    )
+        switch try Self._tlsConfiguration {
+        #if os(macOS) || os(Linux)
+        case .niossl(let config):
+            var tlsConfig = TLSConfiguration.makeClientConfiguration()
+            tlsConfig.trustRoots = withTrustRoots ? (config.trustRoots ?? .default) : .default
+            tlsConfig.certificateChain = withClientKey ? config.certificateChain : []
+            tlsConfig.privateKey = withClientKey ? config.privateKey : nil
+            return .niossl(tlsConfig)
+        #endif
+        #if canImport(Network)
+        case .ts(let config):
+            return .ts(
+                TSTLSConfiguration(
+                    trustRoots: withTrustRoots ? config.trustRoots : nil,
+                    clientIdentity: withClientKey ? config.clientIdentity : nil
                 )
-            #endif
-            }
-        case .failure(let error):
-            throw error
+            )
+        #endif
         }
     }
 }
@@ -400,13 +390,13 @@ extension MQTTError: Equatable {
             (.unrecognisedPacketType, .unrecognisedPacketType),
             (.authWorkflowRequired, .authWorkflowRequired),
             (.serverDisconnection, .serverDisconnection):
-            return true
+            true
         case (.connectionError(let lhsValue), .connectionError(let rhsValue)):
-            return lhsValue == rhsValue
+            lhsValue == rhsValue
         case (.reasonError(let lhsValue), .reasonError(let rhsValue)):
-            return lhsValue == rhsValue
+            lhsValue == rhsValue
         default:
-            return false
+            false
         }
     }
 }
