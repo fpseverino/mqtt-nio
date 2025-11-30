@@ -115,7 +115,7 @@ struct MQTTNewConnectionTests {
         try await MQTTNewConnection.withConnection(
             address: .hostname(Self.hostname, port: 8081),
             configuration: .init(
-                timeout: .seconds(5),
+                timeout: .seconds(30),
                 useSSL: true,
                 tlsConfiguration: Self.getTLSConfiguration(),
                 sniServerName: "soto.codes",
