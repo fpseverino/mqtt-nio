@@ -101,7 +101,7 @@ struct MQTTNewConnectionTests {
                 sniServerName: "soto.codes"
             ),
             identifier: "tlsConnect",
-            eventLoop: MQTTNIOTests.eventLoopGroupSingleton.any(),
+            //eventLoop: MQTTNIOTests.eventLoopGroupSingleton.any(),
             logger: self.logger
         ) { connection in
             try await connection.ping()
@@ -120,7 +120,7 @@ struct MQTTNewConnectionTests {
                 webSocketConfiguration: .init()
             ),
             identifier: "webSocketAndTLSConnect",
-            eventLoop: MQTTNIOTests.eventLoopGroupSingleton.any(),
+            //eventLoop: MQTTNIOTests.eventLoopGroupSingleton.any(),
             logger: self.logger
         ) { connection in
             try await connection.ping()
