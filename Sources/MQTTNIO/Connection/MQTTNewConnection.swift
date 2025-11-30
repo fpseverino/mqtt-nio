@@ -243,7 +243,7 @@ public final actor MQTTNewConnection: Sendable {
 
         let channelPromise = eventLoop.makePromise(of: (any Channel).self)
         do {
-            logger.debug("❌ Before _getBootstrap")
+            logger.debug("❌❌✅ Before _getBootstrap \(eventLoop.description)")
             let connect = try Self._getBootstrap(configuration: configuration, eventLoopGroup: eventLoop, host: host)
                 .connectTimeout(configuration.connectTimeout)
                 .channelInitializer { channel in
@@ -297,8 +297,6 @@ public final actor MQTTNewConnection: Sendable {
                 }
             }
 
-            // For non-WebSocket connections, succeed the promise immediately
-            // For WebSocket connections, the promise is resolved after upgrade completes
             future.whenFailure { error in
                 logger.debug("❌ Error in connect future: \(error)")
             }
