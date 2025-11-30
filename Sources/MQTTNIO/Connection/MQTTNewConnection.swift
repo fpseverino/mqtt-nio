@@ -244,7 +244,7 @@ public final actor MQTTNewConnection: Sendable {
         let channelPromise = eventLoop.makePromise(of: (any Channel).self)
         do {
             logger.debug("❌❌✅ Before _getBootstrap \(eventLoop.description)")
-            let connect = try Self._getBootstrap(configuration: configuration, eventLoopGroup: eventLoop, host: host)
+            let connect = try Self._getBootstrap(configuration: configuration, eventLoopGroup: eventLoop, host: host, logger: logger)
                 .connectTimeout(configuration.connectTimeout)
                 .channelInitializer { channel in
                     do {
@@ -347,7 +347,8 @@ public final actor MQTTNewConnection: Sendable {
     private static func _getBootstrap(
         configuration: MQTTClient.Configuration,
         eventLoopGroup: any EventLoopGroup,
-        host: String
+        host: String,
+        logger: Logger
     ) throws -> NIOClientTCPBootstrap {
         var bootstrap: NIOClientTCPBootstrap
         let serverName = configuration.sniServerName ?? host
@@ -375,6 +376,8 @@ public final actor MQTTNewConnection: Sendable {
             return bootstrap
         }
         #endif
+
+        logger.debug("🚫🚫🚫 SHOULDN'T GET HERE")
 
         #if os(macOS) || os(Linux)
         if let clientBootstrap = ClientBootstrap(validatingGroup: eventLoopGroup) {
