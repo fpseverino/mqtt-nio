@@ -306,6 +306,7 @@ public final actor MQTTNewConnection: Sendable {
                 future.cascadeFailure(to: channelPromise)
             }
         } catch {
+            logger.debug("❌ Error in _makeConnection: \(error)")
             channelPromise.fail(error)
         }
 
