@@ -244,32 +244,30 @@ public final actor MQTTNewConnection: Sendable {
         let channelPromise = eventLoop.makePromise(of: (any Channel).self)
         do {
             let connect = try Self._getBootstrap(configuration: configuration, eventLoopGroup: eventLoop, host: host, logger: logger)
-                //.connectTimeout(configuration.connectTimeout)
+                .connectTimeout(configuration.connectTimeout)
                 .channelInitializer { channel in
-                    do {
-                        // are we using websockets
-                        if let webSocketConfiguration = configuration.webSocketConfiguration {
-                            // prepare for websockets and on upgrade add handlers
-                            let promise = eventLoop.makePromise(of: Void.self)
-                            promise.futureResult.map { _ in channel }
-                                .cascade(to: channelPromise)
-
-                            return Self._setupChannelForWebSockets(
-                                channel,
-                                address: address,
-                                configuration: configuration,
-                                webSocketConfiguration: webSocketConfiguration,
-                                upgradePromise: promise
-                            ) {
-                                try self._setupChannel(channel, configuration: configuration, logger: logger)
-                            }
-                        } else {
-                            try self._setupChannel(channel, configuration: configuration, logger: logger)
+                    let mqttChannelHandler = MQTTChannelHandler(
+                        configuration: .init(configuration),
+                        eventLoop: channel.eventLoop,
+                        logger: logger,
+                        publishListeners: MQTTListeners<Result<MQTTPublishInfo, any Error>>()
+                    )
+                    // are we using websockets
+                    if let webSocketConfiguration = configuration.webSocketConfiguration {
+                        // prepare for websockets and on upgrade add handlers
+                        let promise = eventLoop.makePromise(of: Void.self)
+                        promise.futureResult.map { _ in channel }.cascade(to: channelPromise)
+                        return Self._setupChannelForWebSockets(
+                            channel,
+                            address: address,
+                            configuration: configuration,
+                            webSocketConfiguration: webSocketConfiguration,
+                            upgradePromise: promise
+                        ) {
+                            try channel.pipeline.syncOperations.addHandler(mqttChannelHandler)
                         }
-                        return eventLoop.makeSucceededVoidFuture()
-                    } catch {
-                        channelPromise.fail(error)
-                        return eventLoop.makeFailedFuture(error)
+                    } else {
+                        return channel.pipeline.addHandler(mqttChannelHandler)
                     }
                 }
 
