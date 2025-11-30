@@ -223,8 +223,9 @@ extension TSTLSConfiguration {
                     }
 
                     let trust = sec_trust_copy_ref(sec_trust).takeRetainedValue()
-                    if let trustRootCertificates = trustRoots {
+                    if let trustRootCertificates = self.trustRoots {
                         SecTrustSetAnchorCertificates(trust, trustRootCertificates as CFArray)
+                        SecTrustSetAnchorCertificatesOnly(trust, false)
                     }
                     SecTrustEvaluateAsyncWithError(trust, Self.tlsDispatchQueue) { _, result, error in
                         if let error {
