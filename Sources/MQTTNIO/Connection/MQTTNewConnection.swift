@@ -243,12 +243,10 @@ public final actor MQTTNewConnection: Sendable {
 
         let channelPromise = eventLoop.makePromise(of: (any Channel).self)
         do {
-            logger.debug("❌❌✅ Before _getBootstrap \(eventLoop.description)")
-            let connect = try Self._getBootstrap(configuration: configuration, eventLoopGroup: eventLoop, host: host, logger: logger)
+            let connect = try Self._getBootstrap(configuration: configuration, eventLoopGroup: eventLoop, host: host)
                 .connectTimeout(configuration.connectTimeout)
                 .channelInitializer { channel in
                     do {
-                        logger.debug("❌ In channelInitializer")
                         // are we using websockets
                         if let webSocketConfiguration = configuration.webSocketConfiguration {
                             // prepare for websockets and on upgrade add handlers
@@ -268,25 +266,17 @@ public final actor MQTTNewConnection: Sendable {
                         } else {
                             try self._setupChannel(channel, configuration: configuration, logger: logger)
                         }
-                        logger.debug("❌ After channelInitializer")
                         return eventLoop.makeSucceededVoidFuture()
                     } catch {
-                        logger.debug("❌ Error in channelInitializer: \(error)")
                         channelPromise.fail(error)
                         return eventLoop.makeFailedFuture(error)
                     }
                 }
 
-            logger.debug("❌ After _getBootstrap")
-
-            logger.debug("Client connecting to \(address)")
-
             let future: EventLoopFuture<any Channel>
             switch address.value {
             case .hostname(let host, let port):
-                logger.debug("❌❌❌❌ In connect to hostname \(host):\(port)")
                 future = connect.connect(host: host, port: port)
-                logger.debug("❌❌❌❌ After connect to hostname \(host):\(port)")
                 future.whenSuccess { _ in
                     logger.debug("Client connected to \(host):\(port)")
                 }
@@ -297,10 +287,6 @@ public final actor MQTTNewConnection: Sendable {
                 }
             }
 
-            future.whenFailure { error in
-                logger.debug("❌ Error in connect future: \(error)")
-            }
-
             future
                 .map { channel in
                     if !configuration.useWebSockets {
@@ -309,7 +295,6 @@ public final actor MQTTNewConnection: Sendable {
                 }
                 .cascadeFailure(to: channelPromise)
         } catch {
-            logger.debug("❌ Error in _makeConnection: \(error)")
             channelPromise.fail(error)
         }
 
@@ -347,8 +332,7 @@ public final actor MQTTNewConnection: Sendable {
     private static func _getBootstrap(
         configuration: MQTTClient.Configuration,
         eventLoopGroup: any EventLoopGroup,
-        host: String,
-        logger: Logger
+        host: String
     ) throws -> NIOClientTCPBootstrap {
         var bootstrap: NIOClientTCPBootstrap
         let serverName = configuration.sniServerName ?? host
@@ -376,8 +360,6 @@ public final actor MQTTNewConnection: Sendable {
             return bootstrap
         }
         #endif
-
-        logger.debug("🚫🚫🚫 SHOULDN'T GET HERE")
 
         #if os(macOS) || os(Linux)
         if let clientBootstrap = ClientBootstrap(validatingGroup: eventLoopGroup) {
