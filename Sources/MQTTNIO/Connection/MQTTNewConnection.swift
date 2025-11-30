@@ -244,7 +244,7 @@ public final actor MQTTNewConnection: Sendable {
         let channelPromise = eventLoop.makePromise(of: (any Channel).self)
         do {
             let connect = try Self._getBootstrap(configuration: configuration, eventLoopGroup: eventLoop, host: host, logger: logger)
-                .connectTimeout(configuration.connectTimeout)
+                //.connectTimeout(configuration.connectTimeout)
                 .channelInitializer { channel in
                     do {
                         // are we using websockets
