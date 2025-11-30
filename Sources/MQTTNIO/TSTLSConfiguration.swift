@@ -253,43 +253,4 @@ extension TSTLSConfiguration {
     static var tlsDispatchQueue = DispatchQueue(label: "TSTLSConfiguration")
 }
 
-/// Deprecated TSTLSConfiguration
-@available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
-@available(*, deprecated, message: "Use the init using TSTLSVersion")
-extension TSTLSConfiguration {
-    /// Initialize TSTLSConfiguration
-    public init(
-        minimumTLSVersion: tls_protocol_version_t,
-        maximumTLSVersion: tls_protocol_version_t? = nil,
-        trustRoots: Certificates,
-        clientIdentity: Identity,
-        applicationProtocols: [String] = [],
-        certificateVerification: TSCertificateVerification = .fullVerification
-    ) {
-        self.minimumTLSVersion = minimumTLSVersion.tsTLSVersion
-        self.maximumTLSVersion = maximumTLSVersion?.tsTLSVersion
-        self.trustRoots = trustRoots.certificates
-        self.clientIdentity = clientIdentity.identity
-        self.applicationProtocols = applicationProtocols
-        self.certificateVerification = certificateVerification
-    }
-
-    /// Initialize TSTLSConfiguration
-    public init(
-        minimumTLSVersion: tls_protocol_version_t,
-        maximumTLSVersion: tls_protocol_version_t? = nil,
-        trustRoots: [SecCertificate]? = nil,
-        clientIdentity: SecIdentity? = nil,
-        applicationProtocols: [String] = [],
-        certificateVerification: TSCertificateVerification = .fullVerification
-    ) {
-        self.minimumTLSVersion = minimumTLSVersion.tsTLSVersion
-        self.maximumTLSVersion = maximumTLSVersion?.tsTLSVersion
-        self.trustRoots = trustRoots
-        self.clientIdentity = clientIdentity
-        self.applicationProtocols = applicationProtocols
-        self.certificateVerification = certificateVerification
-    }
-}
-
 #endif

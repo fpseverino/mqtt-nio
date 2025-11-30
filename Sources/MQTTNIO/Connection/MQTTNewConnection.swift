@@ -284,7 +284,9 @@ public final actor MQTTNewConnection: Sendable {
             let future: EventLoopFuture<any Channel>
             switch address.value {
             case .hostname(let host, let port):
+                logger.debug("❌❌❌❌ In connect to hostname \(host):\(port)")
                 future = connect.connect(host: host, port: port)
+                logger.debug("❌❌❌❌ After connect to hostname \(host):\(port)")
                 future.whenSuccess { _ in
                     logger.debug("Client connected to \(host):\(port)")
                 }
