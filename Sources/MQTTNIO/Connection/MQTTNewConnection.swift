@@ -247,28 +247,33 @@ public final actor MQTTNewConnection: Sendable {
             let connect = try Self._getBootstrap(configuration: configuration, eventLoopGroup: eventLoop, host: host)
                 .connectTimeout(configuration.connectTimeout)
                 .channelInitializer { channel in
-                    logger.debug("❌ In channelInitializer")
-                    // are we using websockets
-                    if let webSocketConfiguration = configuration.webSocketConfiguration {
-                        // prepare for websockets and on upgrade add handlers
-                        let promise = eventLoop.makePromise(of: Void.self)
-                        promise.futureResult.map { _ in channel }
-                            .cascade(to: channelPromise)
+                    do {
+                        logger.debug("❌ In channelInitializer")
+                        // are we using websockets
+                        if let webSocketConfiguration = configuration.webSocketConfiguration {
+                            // prepare for websockets and on upgrade add handlers
+                            let promise = eventLoop.makePromise(of: Void.self)
+                            promise.futureResult.map { _ in channel }
+                                .cascade(to: channelPromise)
 
-                        return Self._setupChannelForWebSockets(
-                            channel,
-                            address: address,
-                            configuration: configuration,
-                            webSocketConfiguration: webSocketConfiguration,
-                            upgradePromise: promise
-                        ) {
+                            return Self._setupChannelForWebSockets(
+                                channel,
+                                address: address,
+                                configuration: configuration,
+                                webSocketConfiguration: webSocketConfiguration,
+                                upgradePromise: promise
+                            ) {
+                                try self._setupChannel(channel, configuration: configuration, logger: logger)
+                            }
+                        } else {
                             try self._setupChannel(channel, configuration: configuration, logger: logger)
                         }
-                    } else {
-                        return channel.eventLoop.makeCompletedFuture {
-                            try self._setupChannel(channel, configuration: configuration, logger: logger)
-                            logger.debug("❌ After channelInitializer")
-                        }
+                        logger.debug("❌ After channelInitializer")
+                        return eventLoop.makeSucceededVoidFuture()
+                    } catch {
+                        logger.debug("❌ Error in channelInitializer: \(error)")
+                        channelPromise.fail(error)
+                        return eventLoop.makeFailedFuture(error)
                     }
                 }
 
