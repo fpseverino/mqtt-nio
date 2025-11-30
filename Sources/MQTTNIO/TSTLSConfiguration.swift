@@ -16,6 +16,7 @@
 @preconcurrency import Security
 
 import Foundation
+import Logging
 import Network
 #if os(macOS) || os(Linux)
 import NIOSSL
@@ -192,7 +193,7 @@ public struct TSTLSConfiguration: Sendable {
 }
 
 extension TSTLSConfiguration {
-    func getNWProtocolTLSOptions() throws -> NWProtocolTLS.Options {
+    func getNWProtocolTLSOptions(logger: Logger? = nil) throws -> NWProtocolTLS.Options {
         let options = NWProtocolTLS.Options()
 
         // minimum TLS protocol
@@ -225,22 +226,11 @@ extension TSTLSConfiguration {
                     if let trustRootCertificates = trustRoots {
                         SecTrustSetAnchorCertificates(trust, trustRootCertificates as CFArray)
                     }
-                    if #available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *) {
-                        SecTrustEvaluateAsyncWithError(trust, Self.tlsDispatchQueue) { _, result, error in
-                            if let error {
-                                print("Trust failed: \(error.localizedDescription)")
-                            }
-                            sec_protocol_verify_complete(result)
+                    SecTrustEvaluateAsyncWithError(trust, Self.tlsDispatchQueue) { _, result, error in
+                        if let error {
+                            logger?.error("Trust failed: \(error.localizedDescription)")
                         }
-                    } else {
-                        SecTrustEvaluateAsync(trust, Self.tlsDispatchQueue) { _, result in
-                            switch result {
-                            case .proceed, .unspecified:
-                                sec_protocol_verify_complete(true)
-                            default:
-                                sec_protocol_verify_complete(false)
-                            }
-                        }
+                        sec_protocol_verify_complete(result)
                     }
                 },
                 Self.tlsDispatchQueue
@@ -250,7 +240,7 @@ extension TSTLSConfiguration {
     }
 
     /// Dispatch queue used by Network framework TLS to control certificate verification
-    static var tlsDispatchQueue = DispatchQueue(label: "TSTLSConfiguration")
+    static let tlsDispatchQueue = DispatchQueue(label: "TSTLSConfiguration")
 }
 
 #endif

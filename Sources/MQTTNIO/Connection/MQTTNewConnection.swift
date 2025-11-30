@@ -243,7 +243,7 @@ public final actor MQTTNewConnection: Sendable {
 
         let channelPromise = eventLoop.makePromise(of: (any Channel).self)
         do {
-            let connect = try Self._getBootstrap(configuration: configuration, eventLoopGroup: eventLoop, host: host)
+            let connect = try Self._getBootstrap(configuration: configuration, eventLoopGroup: eventLoop, host: host, logger: logger)
                 .connectTimeout(configuration.connectTimeout)
                 .channelInitializer { channel in
                     do {
@@ -332,7 +332,8 @@ public final actor MQTTNewConnection: Sendable {
     private static func _getBootstrap(
         configuration: MQTTClient.Configuration,
         eventLoopGroup: any EventLoopGroup,
-        host: String
+        host: String,
+        logger: Logger
     ) throws -> NIOClientTCPBootstrap {
         var bootstrap: NIOClientTCPBootstrap
         let serverName = configuration.sniServerName ?? host
@@ -343,7 +344,7 @@ public final actor MQTTNewConnection: Sendable {
             let options: NWProtocolTLS.Options
             switch configuration.tlsConfiguration {
             case .ts(let config):
-                options = try config.getNWProtocolTLSOptions()
+                options = try config.getNWProtocolTLSOptions(logger: logger)
             #if os(macOS) || os(Linux)
             case .niossl:
                 throw MQTTError.wrongTLSConfig
