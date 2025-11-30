@@ -299,14 +299,17 @@ public final actor MQTTNewConnection: Sendable {
 
             // For non-WebSocket connections, succeed the promise immediately
             // For WebSocket connections, the promise is resolved after upgrade completes
-            if !configuration.useWebSockets {
-                future.map { channel in
-                    channelPromise.succeed(channel)
+            future.whenFailure { error in
+                logger.debug("❌ Error in connect future: \(error)")
+            }
+
+            future
+                .map { channel in
+                    if !configuration.useWebSockets {
+                        channelPromise.succeed(channel)
+                    }
                 }
                 .cascadeFailure(to: channelPromise)
-            } else {
-                future.cascadeFailure(to: channelPromise)
-            }
         } catch {
             logger.debug("❌ Error in _makeConnection: \(error)")
             channelPromise.fail(error)
