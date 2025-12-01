@@ -27,7 +27,7 @@ import NIOTransportServices
 import NIOSSL
 #endif
 
-@Suite("MQTTNewConnection Tests")
+@Suite("MQTTNewConnection Tests", .serialized)
 struct MQTTNewConnectionTests {
     static let hostname = ProcessInfo.processInfo.environment["MOSQUITTO_SERVER"] ?? "localhost"
 
