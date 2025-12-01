@@ -246,30 +246,26 @@ public final actor MQTTNewConnection: Sendable {
             let connect = try Self._getBootstrap(configuration: configuration, eventLoopGroup: eventLoop, host: host, logger: logger)
                 .connectTimeout(configuration.connectTimeout)
                 .channelInitializer { channel in
-                    do {
-                        // are we using websockets
-                        if let webSocketConfiguration = configuration.webSocketConfiguration {
-                            // prepare for websockets and on upgrade add handlers
-                            let promise = eventLoop.makePromise(of: Void.self)
-                            promise.futureResult.map { _ in channel }
-                                .cascade(to: channelPromise)
+                    // are we using websockets
+                    if let webSocketConfiguration = configuration.webSocketConfiguration {
+                        // prepare for websockets and on upgrade add handlers
+                        let promise = eventLoop.makePromise(of: Void.self)
+                        promise.futureResult.map { _ in channel }
+                            .cascade(to: channelPromise)
 
-                            return Self._setupChannelForWebSockets(
-                                channel,
-                                address: address,
-                                configuration: configuration,
-                                webSocketConfiguration: webSocketConfiguration,
-                                upgradePromise: promise
-                            ) {
-                                try self._setupChannel(channel, configuration: configuration, logger: logger)
-                            }
-                        } else {
+                        return Self._setupChannelForWebSockets(
+                            channel,
+                            address: address,
+                            configuration: configuration,
+                            webSocketConfiguration: webSocketConfiguration,
+                            upgradePromise: promise
+                        ) {
                             try self._setupChannel(channel, configuration: configuration, logger: logger)
                         }
-                        return eventLoop.makeSucceededVoidFuture()
-                    } catch {
-                        channelPromise.fail(error)
-                        return eventLoop.makeFailedFuture(error)
+                    } else {
+                        return channel.eventLoop.makeCompletedFuture {
+                            try self._setupChannel(channel, configuration: configuration, logger: logger)
+                        }
                     }
                 }
 
@@ -340,32 +336,24 @@ public final actor MQTTNewConnection: Sendable {
         #if canImport(Network)
         // if eventLoop is compatible with NIOTransportServices create a NIOTSConnectionBootstrap
         if let tsBootstrap = NIOTSConnectionBootstrap(validatingGroup: eventLoopGroup) {
-            logger.debug("Using NIO Transport Services bootstrap")
             // create NIOClientTCPBootstrap with NIOTS TLS provider
             let options: NWProtocolTLS.Options
             switch configuration.tlsConfiguration {
             case .ts(let config):
-                logger.debug("Using Transport Services TLS configuration")
                 options = try config.getNWProtocolTLSOptions(logger: logger)
             #if os(macOS) || os(Linux)
             case .niossl:
-                logger.error("NIOSSL configuration provided but using NIO Transport Services - incompatible")
                 throw MQTTError.wrongTLSConfig
             #endif
             default:
-                logger.warning("No TLS configuration provided, using default NWProtocolTLS.Options()")
                 options = NWProtocolTLS.Options()
             }
-            logger.debug("Setting TLS server name (SNI): \(serverName)")
-            logger.debug("Options: \(options.securityProtocolOptions)")
             sec_protocol_options_set_tls_server_name(options.securityProtocolOptions, serverName)
             let tlsProvider = NIOTSClientTLSProvider(tlsOptions: options)
             bootstrap = NIOClientTCPBootstrap(tsBootstrap, tls: tlsProvider)
             if configuration.useSSL {
-                logger.debug("Enabling TLS for connection")
                 return bootstrap.enableTLS()
             }
-            logger.debug("TLS not enabled (useSSL=false)")
             return bootstrap
         }
         #endif
