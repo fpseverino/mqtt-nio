@@ -280,16 +280,10 @@ public final actor MQTTNewConnection: Sendable {
                 future.whenSuccess { _ in
                     logger.debug("Client connected to \(host):\(port)")
                 }
-                future.whenFailure { error in
-                    logger.error("Failed to connect to \(host):\(port) - \(error)")
-                }
             case .unixDomainSocket(let path):
                 future = connect.connect(unixDomainSocketPath: path)
                 future.whenSuccess { _ in
                     logger.debug("Client connected to socket path \(path)")
-                }
-                future.whenFailure { error in
-                    logger.error("Failed to connect to socket path \(path) - \(error)")
                 }
             }
 

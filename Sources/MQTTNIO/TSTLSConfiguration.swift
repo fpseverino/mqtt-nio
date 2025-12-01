@@ -217,21 +217,33 @@ extension TSTLSConfiguration {
             sec_protocol_options_set_verify_block(
                 options.securityProtocolOptions,
                 { _, sec_trust, sec_protocol_verify_complete in
+                    logger?.debug("Certificate verification starting")
+                    
                     guard self.certificateVerification != .none else {
+                        logger?.debug("Certificate verification disabled, accepting")
                         sec_protocol_verify_complete(true)
                         return
                     }
 
                     let trust = sec_trust_copy_ref(sec_trust).takeRetainedValue()
                     if let trustRootCertificates = self.trustRoots {
+                        logger?.debug("Setting custom trust roots, count: \(trustRootCertificates.count)")
                         SecTrustSetAnchorCertificates(trust, trustRootCertificates as CFArray)
+                        SecTrustSetAnchorCertificatesOnly(trust, true)
                     }
-                    SecTrustEvaluateAsyncWithError(trust, Self.tlsDispatchQueue) { _, result, error in
-                        if let error {
-                            logger?.error("Trust failed: \(error.localizedDescription)")
-                        }
-                        sec_protocol_verify_complete(result)
+                    
+                    // Use synchronous evaluation to avoid async completion handler issues in CI environments
+                    logger?.debug("Starting certificate trust evaluation")
+                    var error: CFError?
+                    let result = SecTrustEvaluateWithError(trust, &error)
+                    
+                    if let error = error {
+                        logger?.error("Certificate trust evaluation failed: \(error)")
+                    } else {
+                        logger?.debug("Certificate trust evaluation succeeded: \(result)")
                     }
+                    
+                    sec_protocol_verify_complete(result)
                 },
                 Self.tlsDispatchQueue
             )
