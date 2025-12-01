@@ -194,48 +194,72 @@ public struct TSTLSConfiguration: Sendable {
 
 extension TSTLSConfiguration {
     func getNWProtocolTLSOptions(logger: Logger? = nil) throws -> NWProtocolTLS.Options {
+        logger?.debug("Configuring NWProtocolTLS options")
         let options = NWProtocolTLS.Options()
 
         // minimum TLS protocol
+        logger?.debug("Setting minimum TLS version: \(self.minimumTLSVersion)")
         sec_protocol_options_set_min_tls_protocol_version(options.securityProtocolOptions, self.minimumTLSVersion.tlsProtocolVersion)
 
         // maximum TLS protocol
         if let maximumTLSVersion = self.maximumTLSVersion {
+            logger?.debug("Setting maximum TLS version: \(maximumTLSVersion)")
             sec_protocol_options_set_max_tls_protocol_version(options.securityProtocolOptions, maximumTLSVersion.tlsProtocolVersion)
         }
 
-        if let clientIdentity = self.clientIdentity, let secClientIdentity = sec_identity_create(clientIdentity) {
+        if let clientIdentity = self.clientIdentity {
+            guard let secClientIdentity = sec_identity_create(clientIdentity) else {
+                logger?.error("Failed to create sec_identity from client identity")
+                throw TSTLSConfiguration.Error.invalidData
+            }
+            logger?.debug("Setting client identity for mutual TLS")
             sec_protocol_options_set_local_identity(options.securityProtocolOptions, secClientIdentity)
         }
 
-        for applicationProtocol in self.applicationProtocols {
-            sec_protocol_options_add_tls_application_protocol(options.securityProtocolOptions, applicationProtocol)
+        if !self.applicationProtocols.isEmpty {
+            logger?.debug("Adding application protocols: \(self.applicationProtocols)")
+            for applicationProtocol in self.applicationProtocols {
+                sec_protocol_options_add_tls_application_protocol(options.securityProtocolOptions, applicationProtocol)
+            }
         }
 
         if self.certificateVerification != .fullVerification || self.trustRoots != nil {
+            logger?.debug("Setting up custom certificate verification (mode: \(self.certificateVerification), custom trust roots: \(self.trustRoots != nil))")
             // add verify block to control certificate verification
             sec_protocol_options_set_verify_block(
                 options.securityProtocolOptions,
                 { _, sec_trust, sec_protocol_verify_complete in
                     guard self.certificateVerification != .none else {
+                        logger?.debug("Certificate verification disabled, accepting all certificates")
                         sec_protocol_verify_complete(true)
                         return
                     }
 
                     let trust = sec_trust_copy_ref(sec_trust).takeRetainedValue()
                     if let trustRootCertificates = self.trustRoots {
+                        logger?.debug("Using custom trust root certificates (\(trustRootCertificates.count) certificates)")
                         SecTrustSetAnchorCertificates(trust, trustRootCertificates as CFArray)
                     }
+                    
+                    logger?.trace("Evaluating certificate trust")
                     SecTrustEvaluateAsyncWithError(trust, Self.tlsDispatchQueue) { _, result, error in
                         if let error {
-                            logger?.error("Trust failed: \(error.localizedDescription)")
+                            logger?.error("Certificate trust evaluation failed: \(error.localizedDescription)")
+                        } else if result {
+                            logger?.debug("Certificate trust evaluation succeeded")
+                        } else {
+                            logger?.warning("Certificate trust evaluation failed without error")
                         }
                         sec_protocol_verify_complete(result)
                     }
                 },
                 Self.tlsDispatchQueue
             )
+        } else {
+            logger?.debug("Using default certificate verification with system trust roots")
         }
+        
+        logger?.debug("NWProtocolTLS options configured successfully")
         return options
     }
 
