@@ -11,11 +11,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-import Atomics
 import Logging
 import NIO
 import NIOFoundationCompat
 import NIOHTTP1
+import Synchronization
 import XCTest
 
 @testable import MQTTNIO
@@ -240,7 +240,7 @@ final class AsyncMQTTNIOTests {
     }
 
     func testPersistentSubscription() async throws {
-        let count = ManagedAtomic(0)
+        let count = Atomic(0)
         let (stream, cont) = AsyncStream.makeStream(of: Void.self)
         try await withMQTTClient(identifier: "testPublish+async") { client in
             try await withMQTTClient(identifier: "testPublish+async2") { client2 in
@@ -258,7 +258,7 @@ final class AsyncMQTTNIOTests {
                                 var buffer = publish.payload
                                 let string = buffer.readString(length: buffer.readableBytes)
                                 XCTAssertEqual(string, payloadString)
-                                let value = count.wrappingIncrementThenLoad(by: 1, ordering: .relaxed)
+                                let value = count.wrappingAdd(1, ordering: .relaxed).newValue
                                 if value == 2 {
                                     return
                                 }
