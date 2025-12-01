@@ -27,7 +27,7 @@ import NIOTransportServices
 import NIOSSL
 #endif
 
-@Suite("MQTTNewConnection Tests")
+@Suite("MQTTNewConnection Tests", .serialized)
 struct MQTTNewConnectionTests {
     static let hostname = ProcessInfo.processInfo.environment["MOSQUITTO_SERVER"] ?? "localhost"
 
@@ -317,38 +317,40 @@ struct MQTTNewConnectionTests {
         #endif
     }
 
-    static let _tlsConfiguration: MQTTClient.TLSConfigurationType = {
-        #if os(Linux)
-        let rootCertificate = try! NIOSSLCertificate.fromPEMFile(Self.rootPath + "/mosquitto/certs/ca.pem")
-        let certificate = try! NIOSSLCertificate.fromPEMFile(Self.rootPath + "/mosquitto/certs/client.pem")
-        let privateKey = try! NIOSSLPrivateKey(file: Self.rootPath + "/mosquitto/certs/client.key", format: .pem)
-        var tlsConfiguration = TLSConfiguration.makeClientConfiguration()
-        tlsConfiguration.trustRoots = .certificates(rootCertificate)
-        tlsConfiguration.certificateChain = certificate.map { .certificate($0) }
-        tlsConfiguration.privateKey = .privateKey(privateKey)
-        return .niossl(tlsConfiguration)
-        #else
-        let caData = try! Data(contentsOf: URL(fileURLWithPath: Self.rootPath + "/mosquitto/certs/ca.der"))
-        let trustRootCertificates = SecCertificateCreateWithData(nil, caData as CFData).map { [$0] }
-        let p12Data = try! Data(contentsOf: URL(fileURLWithPath: Self.rootPath + "/mosquitto/certs/client.p12"))
-        let options: [String: String] = [kSecImportExportPassphrase as String: "MQTTNIOClientCertPassword"]
-        var rawItems: CFArray?
-        guard SecPKCS12Import(p12Data as CFData, options as CFDictionary, &rawItems) == errSecSuccess else {
-            fatalError("Failed to load client identity from p12")
+    static var _tlsConfiguration: MQTTClient.TLSConfigurationType {
+        get throws {
+            #if os(Linux)
+            let rootCertificate = try NIOSSLCertificate.fromPEMFile(Self.rootPath + "/mosquitto/certs/ca.pem")
+            let certificate = try NIOSSLCertificate.fromPEMFile(Self.rootPath + "/mosquitto/certs/client.pem")
+            let privateKey = try NIOSSLPrivateKey(file: Self.rootPath + "/mosquitto/certs/client.key", format: .pem)
+            var tlsConfiguration = TLSConfiguration.makeClientConfiguration()
+            tlsConfiguration.trustRoots = .certificates(rootCertificate)
+            tlsConfiguration.certificateChain = certificate.map { .certificate($0) }
+            tlsConfiguration.privateKey = .privateKey(privateKey)
+            return .niossl(tlsConfiguration)
+            #else
+            let caData = try Data(contentsOf: URL(fileURLWithPath: Self.rootPath + "/mosquitto/certs/ca.der"))
+            let trustRootCertificates = SecCertificateCreateWithData(nil, caData as CFData).map { [$0] }
+            let p12Data = try Data(contentsOf: URL(fileURLWithPath: Self.rootPath + "/mosquitto/certs/client.p12"))
+            let options: [String: String] = [kSecImportExportPassphrase as String: "MQTTNIOClientCertPassword"]
+            var rawItems: CFArray?
+            guard SecPKCS12Import(p12Data as CFData, options as CFDictionary, &rawItems) == errSecSuccess else {
+                throw MQTTError.wrongTLSConfig
+            }
+            let items = rawItems! as! [[String: Any]]
+            let firstItem = items[0]
+            let identity = firstItem[kSecImportItemIdentity as String] as! SecIdentity?
+            let tlsConfiguration = TSTLSConfiguration(
+                trustRoots: trustRootCertificates,
+                clientIdentity: identity
+            )
+            return .ts(tlsConfiguration)
+            #endif
         }
-        let items = rawItems! as! [[String: Any]]
-        let firstItem = items[0]
-        let identity = firstItem[kSecImportItemIdentity as String] as! SecIdentity?
-        let tlsConfiguration = TSTLSConfiguration(
-            trustRoots: trustRootCertificates,
-            clientIdentity: identity
-        )
-        return .ts(tlsConfiguration)
-        #endif
-    }()
+    }
 
     static func getTLSConfiguration(withTrustRoots: Bool = true, withClientKey: Bool = true) throws -> MQTTClient.TLSConfigurationType {
-        switch Self._tlsConfiguration {
+        switch try Self._tlsConfiguration {
         #if os(macOS) || os(Linux)
         case .niossl(let config):
             var tlsConfig = TLSConfiguration.makeClientConfiguration()
