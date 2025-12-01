@@ -193,7 +193,7 @@ public struct TSTLSConfiguration: Sendable {
 }
 
 extension TSTLSConfiguration {
-    func getNWProtocolTLSOptions(logger: Logger? = nil) throws -> NWProtocolTLS.Options {
+    func getNWProtocolTLSOptions(logger: Logger) throws -> NWProtocolTLS.Options {
         let options = NWProtocolTLS.Options()
 
         // minimum TLS protocol
@@ -228,7 +228,7 @@ extension TSTLSConfiguration {
                     }
                     SecTrustEvaluateAsyncWithError(trust, Self.tlsDispatchQueue) { _, result, error in
                         if let error {
-                            logger?.error("Trust failed: \(error.localizedDescription)")
+                            logger.error("Trust failed: \(error.localizedDescription)")
                         }
                         sec_protocol_verify_complete(result)
                     }
