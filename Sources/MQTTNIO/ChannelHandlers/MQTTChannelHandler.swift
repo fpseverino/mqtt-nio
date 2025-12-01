@@ -59,7 +59,6 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
     }
 
     private func setInitialized(context: ChannelHandlerContext) {
-        self.logger.debug("Setting channel handler as initialized")
         self.stateMachine.setInitialized(context: context)
         if !self.configuration.disablePing {
             guard self.pingreqCallback == nil else { return }
@@ -68,13 +67,10 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
     }
 
     func waitOnInitialized() -> EventLoopFuture<Void> {
-        self.logger.debug("Waiting for channel handler to initialize")
         switch self.stateMachine.waitOnInitialized() {
         case .reportedClosed(let error):
-            self.logger.error("Channel handler initialization failed: \(error?.localizedDescription ?? "unknown error")")
             return self.eventLoop.makeFailedFuture(error ?? MQTTError.noConnection)
         case .done:
-            self.logger.debug("Channel handler initialized successfully")
             return self.eventLoop.makeSucceededVoidFuture()
         }
     }
@@ -83,12 +79,12 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
         if context.channel.isActive {
             self.setInitialized(context: context)
         }
-        self.logger.debug("MQTTChannelHandler added to pipeline, channel.isActive: \(context.channel.isActive)")
+        self.logger.trace("MQTTChannelHandler added to pipeline, channel.isActive: \(context.channel.isActive)")
     }
 
     func channelActive(context: ChannelHandlerContext) {
         self.setInitialized(context: context)
-        self.logger.debug("Channel became active.")
+        self.logger.trace("Channel became active.")
         context.fireChannelActive()
     }
 
@@ -98,7 +94,7 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
 
         // channel is inactive so we should fail all tasks in progress
         self.failTasksAndClose(with: MQTTError.serverClosedConnection)
-        self.logger.debug("Channel became inactive.")
+        self.logger.trace("Channel became inactive.")
 
         context.fireChannelInactive()
     }
