@@ -134,7 +134,7 @@ final class MQTTConnection {
             let options: NWProtocolTLS.Options
             switch client.configuration.tlsConfiguration {
             case .ts(let config):
-                options = try config.getNWProtocolTLSOptions()
+                options = try config.getNWProtocolTLSOptions(logger: client.logger)
             #if os(macOS) || os(Linux)
             case .niossl:
                 throw MQTTError.wrongTLSConfig
