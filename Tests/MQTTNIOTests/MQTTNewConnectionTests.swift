@@ -353,7 +353,10 @@ struct MQTTNewConnectionTests {
         }
     }
 
-    static func getTLSConfiguration(withTrustRoots: Bool = true, withClientKey: Bool = true) throws -> MQTTConnectionConfiguration.TLSConfigurationType {
+    static func getTLSConfiguration(
+        withTrustRoots: Bool = true,
+        withClientKey: Bool = true
+    ) throws -> MQTTConnectionConfiguration.TLSConfigurationType {
         switch try Self._tlsConfiguration {
         #if os(macOS) || os(Linux)
         case .niossl(let config):

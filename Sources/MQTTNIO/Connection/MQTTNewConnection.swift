@@ -171,7 +171,7 @@ public final actor MQTTNewConnection: Sendable {
             case .v3_1_1:
                 .init()
             case .v5_0(let connectProperties, _, _, _):
-                connectProperties // TODO: Do we need to set `.sessionExpiryInterval(0xFFFF_FFFF)` by default?
+                connectProperties  // TODO: Do we need to set `.sessionExpiryInterval(0xFFFF_FFFF)` by default?
             }
         let packet = MQTTConnectPacket(
             cleanSession: cleanSession,

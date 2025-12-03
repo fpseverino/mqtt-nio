@@ -54,7 +54,7 @@ struct MQTTNewConnectionV5Tests {
                         payload: ByteBufferAllocator().buffer(string: "Test payload"),
                         qos: .atLeastOnce,
                         retain: false,
-                        properties: .init() // TODO: Do we need to set `.sessionExpiryInterval(0xFFFF_FFFF)` by default?
+                        properties: .init()  // TODO: Do we need to set `.sessionExpiryInterval(0xFFFF_FFFF)` by default?
                     )
                 )
             ),
@@ -70,7 +70,7 @@ struct MQTTNewConnectionV5Tests {
         .topicAliasMaximum(1024),
         .sessionExpiryInterval(15),
         .userProperty("test", "value"),
-        .authenticationData(ByteBufferAllocator().buffer(string: "TestBuffer"))
+        .authenticationData(ByteBufferAllocator().buffer(string: "TestBuffer")),
     ]
 
     @Test("Connect with Properties", arguments: Self.properties)
@@ -111,7 +111,7 @@ struct MQTTNewConnectionV5Tests {
                 payload: ByteBufferAllocator().buffer(string: "Test payload"),
                 qos: qos,
                 properties: properties
-           )
+            )
         }
     }
 
@@ -122,7 +122,7 @@ struct MQTTNewConnectionV5Tests {
         await #expect(throws: MQTTError.reasonError(.badAuthenticationMethod)) {
             try await MQTTNewConnection.withConnection(
                 address: .hostname(Self.hostname),
-                configuration: .init(version: .v5_0( connectProperties: [.authenticationMethod("test")])),
+                configuration: .init(version: .v5_0(connectProperties: [.authenticationMethod("test")])),
                 identifier: "badAuthenticationMethodV5",
                 logger: self.logger
             ) { _ in }
