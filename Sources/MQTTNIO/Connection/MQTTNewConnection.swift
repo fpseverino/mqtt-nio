@@ -38,7 +38,7 @@ public final actor MQTTNewConnection: Sendable {
     let logger: Logger
     let channel: any Channel
     let channelHandler: MQTTChannelHandler
-    let configuration: MQTTClient.Configuration
+    let configuration: MQTTConnectionConfiguration
     let globalPacketId = Atomic<UInt16>(1)
     /// Inflight messages
     private var inflight: MQTTInflight
@@ -50,7 +50,7 @@ public final actor MQTTNewConnection: Sendable {
     private init(
         channel: any Channel,
         channelHandler: MQTTChannelHandler,
-        configuration: MQTTClient.Configuration,
+        configuration: MQTTConnectionConfiguration,
         cleanSession: Bool,
         identifier: String,
         address: MQTTServerAddress?,
@@ -74,7 +74,6 @@ public final actor MQTTNewConnection: Sendable {
     ///   - configuration: Configuration of the MQTT connection.
     ///   - identifier: Client identifier for the broker. This must be unique.
     ///   - cleanSession: Whether to start a clean session.
-    ///   - will: PUBLISH message to be posted as soon as connection is made.
     ///   - eventLoop: EventLoop to run the connection on.
     ///   - logger: Logger to use for the connection.
     ///   - isolation: Actor isolation.
@@ -82,10 +81,9 @@ public final actor MQTTNewConnection: Sendable {
     /// - Returns: Value returned from the operation closure.
     public static func withConnection<Value>(
         address: MQTTServerAddress,
-        configuration: MQTTClient.Configuration = .init(),
+        configuration: MQTTConnectionConfiguration = .init(),
         identifier: String,
         cleanSession: Bool = true,
-        will: (topicName: String, payload: ByteBuffer, qos: MQTTQoS, retain: Bool)? = nil,
         eventLoop: any EventLoop = MultiThreadedEventLoopGroup.singleton.any(),
         logger: Logger,
         isolation: isolated (any Actor)? = #isolation,
@@ -95,7 +93,6 @@ public final actor MQTTNewConnection: Sendable {
             address: address,
             identifier: identifier,
             cleanSession: cleanSession,
-            will: will,
             configuration: configuration,
             eventLoop: eventLoop,
             logger: logger
@@ -126,7 +123,7 @@ public final actor MQTTNewConnection: Sendable {
 
     /// Ping the server to test if it is still alive and to tell it you are alive.
     ///
-    /// You shouldn't need to call this as the `MQTTClient` automatically sends PINGREQ messages to the server to ensure
+    /// You shouldn't need to call this as the ``MQTTConnection`` automatically sends PINGREQ messages to the server to ensure
     /// the connection is still live. If you initialize the client with the configuration `disablePingReq: true` then these
     /// are disabled and it is up to you to send the PINGREQ messages yourself
     public func ping() async throws {
@@ -140,25 +137,42 @@ public final actor MQTTNewConnection: Sendable {
         address: MQTTServerAddress,
         identifier: String,
         cleanSession: Bool,
-        will: (topicName: String, payload: ByteBuffer, qos: MQTTQoS, retain: Bool)? = nil,
-        configuration: MQTTClient.Configuration,
+        configuration: MQTTConnectionConfiguration,
         eventLoop: any EventLoop = MultiThreadedEventLoopGroup.singleton.any(),
         logger: Logger
     ) async throws -> MQTTNewConnection {
-        let publish = will.map {
-            MQTTPublishInfo(
-                qos: .atMostOnce,
-                retain: $0.retain,
-                dup: false,
-                topicName: $0.topicName,
-                payload: $0.payload,
-                properties: .init()
-            )
-        }
-        var properties = MQTTProperties()
-        if configuration.version == .v5_0, cleanSession == false {
-            properties.append(.sessionExpiryInterval(0xFFFF_FFFF))
-        }
+        let publish =
+            switch configuration.version {
+            case .v3_1_1(let will):
+                will.map {
+                    MQTTPublishInfo(
+                        qos: .atMostOnce,
+                        retain: $0.retain,
+                        dup: false,
+                        topicName: $0.topicName,
+                        payload: $0.payload,
+                        properties: .init()
+                    )
+                }
+            case .v5_0(_, _, let will, _):
+                will.map {
+                    MQTTPublishInfo(
+                        qos: .atMostOnce,
+                        retain: $0.retain,
+                        dup: false,
+                        topicName: $0.topicName,
+                        payload: $0.payload,
+                        properties: $0.properties
+                    )
+                }
+            }
+        let properties: MQTTProperties =
+            switch configuration.version {
+            case .v3_1_1:
+                .init()
+            case .v5_0(let connectProperties, _, _, _):
+                connectProperties // TODO: Do we need to set `.sessionExpiryInterval(0xFFFF_FFFF)` by default?
+            }
         let packet = MQTTConnectPacket(
             cleanSession: cleanSession,
             keepAliveSeconds: UInt16(configuration.keepAliveInterval.nanoseconds / 1_000_000_000),
@@ -219,13 +233,20 @@ public final actor MQTTNewConnection: Sendable {
         else {
             return
         }
-        _ = self.channel.writeAndFlush(MQTTDisconnectPacket())
+        let disconnectPacket: MQTTDisconnectPacket =
+            switch self.configuration.version {
+            case .v3_1_1:
+                MQTTDisconnectPacket()
+            case .v5_0(_, let disconnectProperties, _, _):
+                MQTTDisconnectPacket(properties: disconnectProperties)
+            }
+        _ = self.channel.writeAndFlush(disconnectPacket)
         self.channel.close(mode: .all, promise: nil)
     }
 
     private static func _makeConnection(
         address: MQTTServerAddress,
-        configuration: MQTTClient.Configuration,
+        configuration: MQTTConnectionConfiguration,
         cleanSession: Bool,
         identifier: String,
         eventLoop: any EventLoop,
@@ -315,7 +336,7 @@ public final actor MQTTNewConnection: Sendable {
     @discardableResult
     private static func _setupChannel(
         _ channel: any Channel,
-        configuration: MQTTClient.Configuration,
+        configuration: MQTTConnectionConfiguration,
         logger: Logger
     ) throws -> MQTTChannelHandler {
         channel.eventLoop.assertInEventLoop()
@@ -330,7 +351,7 @@ public final actor MQTTNewConnection: Sendable {
     }
 
     private static func _getBootstrap(
-        configuration: MQTTClient.Configuration,
+        configuration: MQTTConnectionConfiguration,
         eventLoopGroup: any EventLoopGroup,
         host: String,
         logger: Logger
@@ -388,8 +409,8 @@ public final actor MQTTNewConnection: Sendable {
     private static func _setupChannelForWebSockets(
         _ channel: any Channel,
         address: MQTTServerAddress,
-        configuration: MQTTClient.Configuration,
-        webSocketConfiguration: MQTTClient.WebSocketConfiguration,
+        configuration: MQTTConnectionConfiguration,
+        webSocketConfiguration: MQTTConnectionConfiguration.WebSocketConfiguration,
         upgradePromise promise: EventLoopPromise<Void>,
         afterHandlerAdded: @escaping () throws -> Void
     ) -> EventLoopFuture<Void> {
@@ -441,7 +462,7 @@ public final actor MQTTNewConnection: Sendable {
     }
 
     /// connect to broker
-    private func _connect(
+    func _connect(
         packet: MQTTConnectPacket,
         authWorkflow: (@Sendable (MQTTAuthV5) async throws -> MQTTAuthV5)? = nil
     ) async throws -> MQTTConnAckPacket {
