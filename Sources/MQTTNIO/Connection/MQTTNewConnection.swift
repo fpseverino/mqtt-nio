@@ -142,7 +142,7 @@ public final actor MQTTNewConnection: Sendable {
         logger: Logger
     ) async throws -> MQTTNewConnection {
         let publish =
-            switch configuration.version {
+            switch configuration.versionConfiguration {
             case .v3_1_1(let will):
                 will.map {
                     MQTTPublishInfo(
@@ -167,7 +167,7 @@ public final actor MQTTNewConnection: Sendable {
                 }
             }
         let properties: MQTTProperties =
-            switch configuration.version {
+            switch configuration.versionConfiguration {
             case .v3_1_1:
                 .init()
             case .v5_0(let connectProperties, _, _, _):
@@ -234,7 +234,7 @@ public final actor MQTTNewConnection: Sendable {
             return
         }
         let disconnectPacket: MQTTDisconnectPacket =
-            switch self.configuration.version {
+            switch self.configuration.versionConfiguration {
             case .v3_1_1:
                 MQTTDisconnectPacket()
             case .v5_0(_, let disconnectProperties, _, _):

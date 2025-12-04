@@ -71,8 +71,8 @@ extension MQTTNewConnection {
     /// Access MQTT v5 functionality
     public nonisolated var v5: V5 {
         get throws {
-            guard self.configuration.version == .v5_0() else {
-                throw MQTTError.versionMismatch(expected: .v5_0(), actual: self.configuration.version)
+            guard self.configuration.version == .v5_0 else {
+                throw MQTTError.versionMismatch(expected: .v5_0, actual: self.configuration.version)
             }
             return V5(connection: self)
         }

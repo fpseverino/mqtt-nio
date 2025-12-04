@@ -20,7 +20,23 @@ import NIOSSL
 
 public struct MQTTConnectionConfiguration: Sendable {
     /// Version of MQTT server to connect to
-    public enum Version: Sendable, Equatable {
+    public enum Version: Sendable {
+        case v3_1_1
+        case v5_0
+
+        init(_ oldVersion: MQTTClient.Version) {
+            self =
+                switch oldVersion {
+                case .v3_1_1:
+                    .v3_1_1
+                case .v5_0:
+                    .v5_0
+                }
+        }
+    }
+
+    /// Connection configuration for specific MQTT version
+    public enum VersionConfiguration: Sendable {
         case v3_1_1(
             will: (topicName: String, payload: ByteBuffer, qos: MQTTQoS, retain: Bool)? = nil
         )
@@ -31,19 +47,10 @@ public struct MQTTConnectionConfiguration: Sendable {
             authWorkflow: (@Sendable (MQTTAuthV5) async throws -> MQTTAuthV5)? = nil
         )
 
-        public static func == (lhs: Version, rhs: Version) -> Bool {
-            switch (lhs, rhs) {
-            case (.v3_1_1, .v3_1_1), (.v5_0, .v5_0): true
-            default: false
-            }
-        }
-
-        init(_ version: MQTTClient.Version) {
-            switch version {
-            case .v3_1_1:
-                self = .v3_1_1()
-            case .v5_0:
-                self = .v5_0()
+        var version: Version {
+            switch self {
+            case .v3_1_1: .v3_1_1
+            case .v5_0: .v5_0
             }
         }
     }
@@ -88,8 +95,8 @@ public struct MQTTConnectionConfiguration: Sendable {
         public var initialRequestHeaders: HTTPHeaders
     }
 
-    /// Version of MQTT server client is connecting to
-    public var version: Version
+    /// Connection configuration for the version of MQTT server to connect to
+    public var versionConfiguration: VersionConfiguration
     /// disable the automatic sending of pingreq messages
     public var disablePing: Bool
     /// MQTT keep alive period.
@@ -115,7 +122,7 @@ public struct MQTTConnectionConfiguration: Sendable {
 
     /// Initialize MQTTClient configuration struct
     /// - Parameters:
-    ///   - version: Version of MQTT server client is connecting to
+    ///   - versionConfiguration: Connection configuration for the version of MQTT server to connect to
     ///   - disablePing: Disable the automatic sending of pingreq messages
     ///   - keepAliveInterval: MQTT keep alive period.
     ///   - pingInterval: Override calculated interval between each pingreq message
@@ -128,7 +135,7 @@ public struct MQTTConnectionConfiguration: Sendable {
     ///   - sniServerName: Server name used by TLS. This will default to host name if not set
     ///   - webSocketConfiguration: Set this if you want to use WebSockets
     public init(
-        version: Version = .v3_1_1(),
+        versionConfiguration: VersionConfiguration = .v3_1_1(),
         disablePing: Bool = false,
         keepAliveInterval: TimeAmount = .seconds(90),
         pingInterval: TimeAmount? = nil,
@@ -141,7 +148,7 @@ public struct MQTTConnectionConfiguration: Sendable {
         sniServerName: String? = nil,
         webSocketConfiguration: WebSocketConfiguration
     ) {
-        self.version = version
+        self.versionConfiguration = versionConfiguration
         self.disablePing = disablePing
         self.keepAliveInterval = keepAliveInterval
         self.pingInterval = pingInterval
@@ -157,7 +164,7 @@ public struct MQTTConnectionConfiguration: Sendable {
 
     /// Initialize MQTTClient configuration struct
     /// - Parameters:
-    ///   - version: Version of MQTT server client is connecting to
+    ///   - versionConfiguration: Connection configuration for the version of MQTT server to connect to
     ///   - disablePing: Disable the automatic sending of pingreq messages
     ///   - keepAliveInterval: MQTT keep alive period.
     ///   - pingInterval: Override calculated interval between each pingreq message
@@ -172,7 +179,7 @@ public struct MQTTConnectionConfiguration: Sendable {
     ///   - webSocketURLPath: URL Path for web socket. Defaults to "/mqtt"
     ///   - webSocketMaxFrameSize: Maximum frame size for a web socket connection
     public init(
-        version: Version = .v3_1_1(),
+        versionConfiguration: VersionConfiguration = .v3_1_1(),
         disablePing: Bool = false,
         keepAliveInterval: TimeAmount = .seconds(90),
         pingInterval: TimeAmount? = nil,
@@ -187,7 +194,7 @@ public struct MQTTConnectionConfiguration: Sendable {
         webSocketURLPath: String? = nil,
         webSocketMaxFrameSize: Int = 1 << 14
     ) {
-        self.version = version
+        self.versionConfiguration = versionConfiguration
         self.disablePing = disablePing
         self.keepAliveInterval = keepAliveInterval
         self.pingInterval = pingInterval
@@ -218,5 +225,10 @@ public struct MQTTConnectionConfiguration: Sendable {
     /// Maximum frame size for a web socket connection
     public var webSocketMaxFrameSize: Int {
         self.webSocketConfiguration?.maxFrameSize ?? 1 << 14
+    }
+
+    /// Version of MQTT server client is connecting to
+    public var version: Version {
+        self.versionConfiguration.version
     }
 }

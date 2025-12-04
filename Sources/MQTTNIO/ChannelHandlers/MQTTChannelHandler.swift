@@ -250,7 +250,7 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
     /// process packets where no equivalent task was found
     private func processUnhandledPacket(_ packet: MQTTPacket, context: ChannelHandlerContext) {
         // we only send response to v5 server
-        guard self.configuration.version == .v5_0() else { return }
+        guard self.configuration.version == .v5_0 else { return }
         switch packet.type {
         case .PUBREC:
             _ = context.channel.writeAndFlush(

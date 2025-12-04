@@ -36,7 +36,7 @@ struct MQTTNewConnectionTests {
         try await MQTTNewConnection.withConnection(
             address: .hostname(Self.hostname),
             configuration: .init(
-                version: .v3_1_1(
+                versionConfiguration: .v3_1_1(
                     will: (topicName: "MyWillTopic", payload: ByteBufferAllocator().buffer(string: "Test payload"), qos: .atLeastOnce, retain: false)
                 )
             ),

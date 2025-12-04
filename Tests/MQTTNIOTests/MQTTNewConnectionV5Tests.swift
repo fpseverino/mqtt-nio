@@ -35,7 +35,7 @@ struct MQTTNewConnectionV5Tests {
     func connect() async throws {
         try await MQTTNewConnection.withConnection(
             address: .hostname(Self.hostname),
-            configuration: .init(version: .v5_0()),
+            configuration: .init(versionConfiguration: .v5_0()),
             identifier: "connectV5",
             logger: self.logger
         ) { connection in
@@ -48,7 +48,7 @@ struct MQTTNewConnectionV5Tests {
         try await MQTTNewConnection.withConnection(
             address: .hostname(Self.hostname),
             configuration: .init(
-                version: .v5_0(
+                versionConfiguration: .v5_0(
                     will: (
                         topicName: "MyWillTopic",
                         payload: ByteBufferAllocator().buffer(string: "Test payload"),
@@ -77,7 +77,7 @@ struct MQTTNewConnectionV5Tests {
     func connectWith(property: MQTTProperties.Property) async throws {
         try await MQTTNewConnection.withConnection(
             address: .hostname(Self.hostname),
-            configuration: .init(version: .v5_0(connectProperties: .init([property]))),
+            configuration: .init(versionConfiguration: .v5_0(connectProperties: .init([property]))),
             identifier: "connectWithPropertyV5_\(property)",
             logger: self.logger
         ) { connection in
@@ -89,7 +89,7 @@ struct MQTTNewConnectionV5Tests {
     func connectWithNoIdentifier() async throws {
         try await MQTTNewConnection.withConnection(
             address: .hostname(Self.hostname),
-            configuration: .init(version: .v5_0()),
+            configuration: .init(versionConfiguration: .v5_0()),
             identifier: "",
             logger: self.logger
         ) { connection in
@@ -101,7 +101,7 @@ struct MQTTNewConnectionV5Tests {
     func publish(qos: MQTTQoS, property: MQTTProperties.Property?) async throws {
         try await MQTTNewConnection.withConnection(
             address: .hostname(Self.hostname),
-            configuration: .init(version: .v5_0()),
+            configuration: .init(versionConfiguration: .v5_0()),
             identifier: "publishV5QoS\(qos.rawValue)WithProperty\(String(describing: property))",
             logger: self.logger
         ) { connection in
@@ -122,7 +122,7 @@ struct MQTTNewConnectionV5Tests {
         await #expect(throws: MQTTError.reasonError(.badAuthenticationMethod)) {
             try await MQTTNewConnection.withConnection(
                 address: .hostname(Self.hostname),
-                configuration: .init(version: .v5_0(connectProperties: [.authenticationMethod("test")])),
+                configuration: .init(versionConfiguration: .v5_0(connectProperties: [.authenticationMethod("test")])),
                 identifier: "badAuthenticationMethodV5",
                 logger: self.logger
             ) { _ in }
@@ -133,7 +133,7 @@ struct MQTTNewConnectionV5Tests {
     func auth() async throws {
         try await MQTTNewConnection.withConnection(
             address: .hostname(Self.hostname),
-            configuration: .init(version: .v5_0()),
+            configuration: .init(versionConfiguration: .v5_0()),
             identifier: "reAuthV5",
             logger: self.logger
         ) { connection in
