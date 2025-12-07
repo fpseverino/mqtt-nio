@@ -30,11 +30,13 @@ import NIOTransportServices
 import NIOSSL
 #endif
 
+/// A single connection to an MQTT server.
 public final actor MQTTNewConnection: Sendable {
     nonisolated public let unownedExecutor: UnownedSerialExecutor
 
-    /// Client identifier
+    /// Client identifier for the MQTT server.
     public private(set) var identifier: String
+    /// Logger used by connection
     let logger: Logger
     let channel: any Channel
     let channelHandler: MQTTChannelHandler
@@ -47,6 +49,7 @@ public final actor MQTTNewConnection: Sendable {
     var connectionParameters = MQTTClient.ConnectionParameters()
     let cleanSession: Bool
 
+    /// Initialize connection
     private init(
         channel: any Channel,
         channelHandler: MQTTChannelHandler,
@@ -72,7 +75,7 @@ public final actor MQTTNewConnection: Sendable {
     /// - Parameters:
     ///   - address: Internet address of the MQTT server.
     ///   - configuration: Configuration of the MQTT connection.
-    ///   - identifier: Client identifier for the broker. This must be unique.
+    ///   - identifier: Client identifier for the server. This must be unique.
     ///   - cleanSession: Whether to start a clean session.
     ///   - eventLoop: EventLoop to run the connection on.
     ///   - logger: Logger to use for the connection.
@@ -101,13 +104,14 @@ public final actor MQTTNewConnection: Sendable {
         return try await operation(connection)
     }
 
-    /// Publish message to topic
+    /// Publish message to topic.
+    ///
     /// - Parameters:
     ///     - topicName: Topic name on which the message is published.
     ///     - payload: Message payload.
     ///     - qos: Quality of Service for message.
     ///     - retain: Whether this is a retained message.
-    ///     - properties: MQTT v5 properties for the PUBLISH message.
+    ///     - properties: MQTT v5 properties for the `PUBLISH` message.
     public func publish(
         to topicName: String,
         payload: ByteBuffer,
@@ -123,9 +127,9 @@ public final actor MQTTNewConnection: Sendable {
 
     /// Ping the server to test if it is still alive and to tell it you are alive.
     ///
-    /// You shouldn't need to call this as the ``MQTTConnection`` automatically sends PINGREQ messages to the server to ensure
-    /// the connection is still live. If you initialize the client with the configuration `disablePingReq: true` then these
-    /// are disabled and it is up to you to send the PINGREQ messages yourself
+    /// You shouldn't need to call this as the ``MQTTConnection`` automatically sends `PINGREQ` messages to the server to ensure the connection is still live.
+    /// If you initialize the client with the configuration ``MQTTConnectionConfiguration/disablePing`` to `true`
+    /// then these are disabled and it is up to you to send the `PINGREQ` messages yourself.
     public func ping() async throws {
         _ = try await self.sendMessage(MQTTPingreqPacket()) { message in
             guard message.type == .PINGRESP else { return false }

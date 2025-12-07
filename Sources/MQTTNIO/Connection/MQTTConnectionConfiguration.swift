@@ -18,8 +18,31 @@ import NIOHTTP1
 import NIOSSL
 #endif
 
+/// A configuration object that defines how to connect to a MQTT server.
+///
+/// `MQTTConnectionConfiguration` allows you to customize various aspects of the connection,
+/// including authentication credentials, timeouts, and TLS security settings.
+///
+/// Example usage:
+/// ```swift
+/// // Basic configuration
+/// let config = MQTTConnectionConfiguration()
+///
+/// // Configuration with authentication
+/// let authConfig = MQTTConnectionConfiguration(
+///     userName: "user",
+///     password: "password"
+/// )
+///
+/// // Configuration with TLS
+/// let tlsConfig = MQTTConnectionConfiguration(
+///     useSSL: true,
+///     tlsConfiguration: .niossl(.makeClientConfiguration()),
+///     sniServerName: "mqtt.example.com"
+/// )
+/// ```
 public struct MQTTConnectionConfiguration: Sendable {
-    /// Version of MQTT server to connect to
+    /// Version of MQTT server to connect to.
     public enum Version: Sendable {
         case v3_1_1
         case v5_0
@@ -35,7 +58,7 @@ public struct MQTTConnectionConfiguration: Sendable {
         }
     }
 
-    /// Connection configuration for specific MQTT version
+    /// Connection configuration for specific MQTT version.
     public enum VersionConfiguration: Sendable {
         case v3_1_1(
             will: (topicName: String, payload: ByteBuffer, qos: MQTTQoS, retain: Bool)? = nil
@@ -57,26 +80,28 @@ public struct MQTTConnectionConfiguration: Sendable {
 
     /// Enum for different TLS Configuration types.
     ///
-    /// The TLS Configuration type to use if defined by the EventLoopGroup the client is using.
-    /// If you don't provide an EventLoopGroup then the EventLoopGroup created will be defined
-    /// by this variable. It is recommended on iOS you use NIO Transport Services.
+    /// The TLS Configuration type to use is defined by the `EventLoopGroup` the client is using.
+    /// If you don't provide an `EventLoopGroup` then the `EventLoopGroup` created will be defined by this variable.
+    /// It is recommended on iOS that you use NIO Transport Services.
     public enum TLSConfigurationType: Sendable {
-        /// NIOSSL TLS configuration
+        /// NIOSSL TLS configuration.
         #if os(macOS) || os(Linux)
         case niossl(TLSConfiguration)
         #endif
         #if canImport(Network)
-        /// NIO Transport Serviecs TLS configuration
+        /// NIO Transport Services TLS configuration.
         case ts(TSTLSConfiguration)
         #endif
     }
 
+    /// Configuration for WebSocket connection.
     public struct WebSocketConfiguration: Sendable {
-        /// Initialize MQTTClient WebSocket configuration struct
+        /// Creates a WebSocket configuration.
+        ///
         /// - Parameters:
-        ///   - urlPath: WebSocket URL, defaults to "/mqtt"
-        ///   - maxFrameSize: Max frame size WebSocket client will allow
-        ///   - initialRequestHeaders: Additional headers to add to initial HTTP request
+        ///   - urlPath: WebSocket URL, defaults to "/mqtt".
+        ///   - maxFrameSize: Max frame size WebSocket client will allow.
+        ///   - initialRequestHeaders: Additional headers to add to initial HTTP request.
         public init(
             urlPath: String = "/mqtt",
             maxFrameSize: Int = 1 << 14,
@@ -87,53 +112,54 @@ public struct MQTTConnectionConfiguration: Sendable {
             self.initialRequestHeaders = initialRequestHeaders
         }
 
-        /// WebSocket URL, defaults to "/mqtt"
+        /// WebSocket URL, defaults to "/mqtt".
         public var urlPath: String
-        /// Max frame size WebSocket client will allow
+        /// Max frame size WebSocket client will allow.
         public var maxFrameSize: Int
-        /// Additional headers to add to initial HTTP request
+        /// Additional headers to add to initial HTTP request.
         public var initialRequestHeaders: HTTPHeaders
     }
 
-    /// Connection configuration for the version of MQTT server to connect to
+    /// Connection configuration for the version of MQTT server to connect to.
     public var versionConfiguration: VersionConfiguration
-    /// disable the automatic sending of pingreq messages
+    /// Disable the automatic sending of `PINGREQ` messages.
     public var disablePing: Bool
     /// MQTT keep alive period.
     public var keepAliveInterval: TimeAmount
-    /// override interval between each pingreq message
+    /// Override interval between each `PINGREQ` message.
     public var pingInterval: TimeAmount?
-    /// timeout for connecting to server
+    /// Timeout for connecting to server.
     public var connectTimeout: TimeAmount
-    /// timeout for server response
+    /// Timeout for server response.
     public var timeout: TimeAmount?
     /// MQTT user name.
     public var userName: String?
     /// MQTT password.
     public var password: String?
-    /// use encrypted connection to server
+    /// Whether to use encrypted connection to server.
     public var useSSL: Bool
-    /// TLS configuration
+    /// TLS configuration.
     public var tlsConfiguration: TLSConfigurationType?
-    /// server name used by TLS
+    /// Server name used by TLS.
     public var sniServerName: String?
-    /// WebSocket configuration
+    /// WebSocket configuration.
     public var webSocketConfiguration: WebSocketConfiguration?
 
-    /// Initialize MQTTClient configuration struct
+    /// Creates a new MQTT connection configuration.
+    ///
     /// - Parameters:
-    ///   - versionConfiguration: Connection configuration for the version of MQTT server to connect to
-    ///   - disablePing: Disable the automatic sending of pingreq messages
+    ///   - versionConfiguration: Connection configuration for the version of MQTT server to connect to.
+    ///   - disablePing: Disable the automatic sending of `PINGREQ` messages.
     ///   - keepAliveInterval: MQTT keep alive period.
-    ///   - pingInterval: Override calculated interval between each pingreq message
-    ///   - connectTimeout: Timeout for connecting to server
-    ///   - timeout: Timeout for server ACK responses
-    ///   - userName: MQTT user name
-    ///   - password: MQTT password
-    ///   - useSSL: Use encrypted connection to server
-    ///   - tlsConfiguration: TLS configuration, for SSL connection
-    ///   - sniServerName: Server name used by TLS. This will default to host name if not set
-    ///   - webSocketConfiguration: Set this if you want to use WebSockets
+    ///   - pingInterval: Override calculated interval between each `PINGREQ` message.
+    ///   - connectTimeout: Timeout for connecting to server.
+    ///   - timeout: Timeout for server ACK responses.
+    ///   - userName: MQTT user name.
+    ///   - password: MQTT password.
+    ///   - useSSL: Whether to use encrypted connection to server.
+    ///   - tlsConfiguration: TLS configuration, for SSL connection.
+    ///   - sniServerName: Server name used by TLS. This will default to host name if not set.
+    ///   - webSocketConfiguration: Configuration to set if using a WebSocket connection.
     public init(
         versionConfiguration: VersionConfiguration = .v3_1_1(),
         disablePing: Bool = false,
@@ -162,22 +188,23 @@ public struct MQTTConnectionConfiguration: Sendable {
         self.webSocketConfiguration = webSocketConfiguration
     }
 
-    /// Initialize MQTTClient configuration struct
+    /// Creates a new MQTT connection configuration.
+    ///
     /// - Parameters:
-    ///   - versionConfiguration: Connection configuration for the version of MQTT server to connect to
-    ///   - disablePing: Disable the automatic sending of pingreq messages
+    ///   - versionConfiguration: Connection configuration for the version of MQTT server to connect to.
+    ///   - disablePing: Disable the automatic sending of `PINGREQ` messages.
     ///   - keepAliveInterval: MQTT keep alive period.
-    ///   - pingInterval: Override calculated interval between each pingreq message
-    ///   - connectTimeout: Timeout for connecting to server
-    ///   - timeout: Timeout for server ACK responses
-    ///   - userName: MQTT user name
-    ///   - password: MQTT password
-    ///   - useSSL: Use encrypted connection to server
-    ///   - useWebSockets: Use a websocket connection to server
-    ///   - tlsConfiguration: TLS configuration, for SSL connection
-    ///   - sniServerName: Server name used by TLS. This will default to host name if not set
-    ///   - webSocketURLPath: URL Path for web socket. Defaults to "/mqtt"
-    ///   - webSocketMaxFrameSize: Maximum frame size for a web socket connection
+    ///   - pingInterval: Override calculated interval between each `PINGREQ` message.
+    ///   - connectTimeout: Timeout for connecting to server.
+    ///   - timeout: Timeout for server ACK responses.
+    ///   - userName: MQTT user name.
+    ///   - password: MQTT password.
+    ///   - useSSL: Whether to use encrypted connection to server.
+    ///   - useWebSockets: Whether to use a WebSocket connection to server.
+    ///   - tlsConfiguration: TLS configuration, for SSL connection.
+    ///   - sniServerName: Server name used by TLS. This will default to host name if not set.
+    ///   - webSocketURLPath: URL Path for WebSocket. Defaults to "/mqtt".
+    ///   - webSocketMaxFrameSize: Maximum frame size for a WebSocket connection.
     public init(
         versionConfiguration: VersionConfiguration = .v3_1_1(),
         disablePing: Bool = false,
@@ -212,22 +239,22 @@ public struct MQTTConnectionConfiguration: Sendable {
         }
     }
 
-    /// use a websocket connection to server
+    /// Whether is using WebSockets for connection.
     public var useWebSockets: Bool {
         self.webSocketConfiguration != nil
     }
 
-    /// URL Path for web socket. Defaults to "/mqtt"
+    /// URL Path for WebSocket. Defaults to "/mqtt".
     public var webSocketURLPath: String? {
         self.webSocketConfiguration?.urlPath
     }
 
-    /// Maximum frame size for a web socket connection
+    /// Maximum frame size for a WebSocket connection.
     public var webSocketMaxFrameSize: Int {
         self.webSocketConfiguration?.maxFrameSize ?? 1 << 14
     }
 
-    /// Version of MQTT server client is connecting to
+    /// Version of MQTT server client is connecting to.
     public var version: Version {
         self.versionConfiguration.version
     }

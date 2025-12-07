@@ -14,20 +14,20 @@
 import NIOCore
 
 extension MQTTNewConnection {
-    /// Provides implementations of functions that expose MQTT Version 5.0 features
+    /// Provides implementations of functions that expose MQTT Version 5.0 features.
     public struct V5 {
         fileprivate let connection: MQTTNewConnection
 
-        /// Publish message to topic
+        /// Publish message to topic.
+        ///
         /// - Parameters:
-        ///     - topicName: Topic name on which the message is published
-        ///     - payload: Message payload
+        ///     - topicName: Topic name on which the message is published.
+        ///     - payload: Message payload.
         ///     - qos: Quality of Service for message.
         ///     - retain: Whether this is a retained message.
-        ///     - properties: properties to attach to publish message
-        /// - Returns: Future waiting for publish to complete. Depending on QoS setting the future will complete
-        ///     when message is sent, when PUBACK is received or when PUBREC and following PUBCOMP are
-        ///     received. QoS1 and above return an `MQTTAckV5` which contains a `reason` and `properties`
+        ///     - properties: Properties to attach to publish message.
+        ///
+        /// - Returns: QoS1 and above return an `MQTTAckV5` which contains a `reason` and `properties`.
         public func publish(
             to topicName: String,
             payload: ByteBuffer,
@@ -41,12 +41,13 @@ extension MQTTNewConnection {
             return try await self.connection.publish(packet: packet)
         }
 
-        /// Re-authenticate with server
+        /// Re-authenticate with server.
         ///
         /// - Parameters:
-        ///   - properties: properties to attach to auth packet. Must include `authenticationMethod`
-        ///   - authWorkflow: Respond to auth packets from server
-        /// - Returns: final auth packet returned from server
+        ///   - properties: Properties to attach to auth packet. Must include `authenticationMethod`.
+        ///   - authWorkflow: Respond to auth packets from server.
+        ///
+        /// - Returns: Final auth packet returned from server.
         public func auth(
             properties: MQTTProperties,
             authWorkflow: (@Sendable (MQTTAuthV5) async throws -> MQTTAuthV5)? = nil
@@ -68,7 +69,7 @@ extension MQTTNewConnection {
         }
     }
 
-    /// Access MQTT v5 functionality
+    /// Access MQTT v5 functionality.
     public nonisolated var v5: V5 {
         get throws {
             guard self.configuration.version == .v5_0 else {
