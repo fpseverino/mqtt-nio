@@ -100,9 +100,14 @@ public final actor MQTTNewConnection: Sendable {
             eventLoop: eventLoop,
             logger: logger
         )
-        let result = try await operation(connection)
-        try await connection.close()
-        return result
+        do {
+            let result = try await operation(connection)
+            try await connection.close()
+            return result
+        } catch {
+            try? await connection.close()
+            throw error
+        }
     }
 
     /// Publish message to topic.
