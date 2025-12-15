@@ -31,13 +31,20 @@ struct MQTTSubscriptions {
     mutating func notify(_ message: MQTTPublishInfo) {
         self.logger.trace("Received PUBLISH packet", metadata: ["subscription": "\(message.topicName)"])
 
-        switch self.subscriptionMap[message.topicName]?.receivedMessage() {
-        case .forwardMessage(let subscriptions):
-            for subscription in subscriptions {
-                subscription.sendMessage(message)
+        let topicStateMachines = self.subscriptionMap[topicName: message.topicName]
+        guard !topicStateMachines.isEmpty else {
+            self.logger.trace("Received message for missing subscription", metadata: ["subscription": "\(message.topicName)"])
+            return
+        }
+        for topicStateMachine in topicStateMachines {
+            switch topicStateMachine.receivedMessage() {
+            case .forwardMessage(let subscriptions):
+                for subscription in subscriptions {
+                    subscription.sendMessage(message)
+                }
+            case .doNothing:
+                self.logger.trace("Received message for inactive subscription", metadata: ["subscription": "\(message.topicName)"])
             }
-        case .doNothing, .none:
-            self.logger.trace("Received message for inactive subscription", metadata: ["subscription": "\(message.topicName)"])
         }
     }
 
