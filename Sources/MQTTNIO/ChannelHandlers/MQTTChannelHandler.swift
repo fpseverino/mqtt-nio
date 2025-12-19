@@ -248,7 +248,7 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
             return
         }
         switch subscribeAction {
-        case .subscribe(let subscription, _):
+        case .subscribe(let subscription):
             let subscriptionID = subscription.id
             guard !packet.subscriptions.isEmpty else {
                 promise.fail(MQTTPacketError.atLeastOneTopicRequired)

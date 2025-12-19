@@ -16,7 +16,7 @@ import Synchronization
 
 struct MQTTSubscriptions {
     var subscriptionIDMap: [Int: SubscriptionRef]
-    private var subscriptionMap: [TopicFilter: MQTTTopicStateMachine<SubscriptionRef>]
+    var subscriptionMap: [TopicFilter: MQTTTopicStateMachine<SubscriptionRef>]
     let logger: Logger
 
     static let globalSubscriptionID = Atomic<Int>(0)
@@ -63,7 +63,7 @@ struct MQTTSubscriptions {
 
     enum SubscribeAction {
         case doNothing(Int)
-        case subscribe(SubscriptionRef, String)
+        case subscribe(SubscriptionRef)
     }
 
     /// Add subscription to topic.
@@ -75,15 +75,14 @@ struct MQTTSubscriptions {
         let subscription = SubscriptionRef(
             id: id,
             continuation: continuation,
-            topicFilters: try subscriptions.map { try TopicFilter($0.topicFilter) },
-            logger: self.logger
+            topicFilters: try subscriptions.map { try TopicFilter($0.topicFilter) }
         )
         subscriptionIDMap[id] = subscription
         var action = SubscribeAction.doNothing(id)
         for topicFilter in subscription.topicFilters {
             switch subscriptionMap[topicFilter, default: .init()].add(subscription: subscription) {
             case .subscribe:
-                action = .subscribe(subscription, topicFilter.string)
+                action = .subscribe(subscription)
             case .doNothing:
                 break
             }
@@ -141,13 +140,11 @@ final class SubscriptionRef: Identifiable {
     let id: Int
     let topicFilters: [TopicFilter]
     let continuation: MQTTSubscription.Continuation
-    let logger: Logger
 
-    init(id: Int, continuation: MQTTSubscription.Continuation, topicFilters: [TopicFilter], logger: Logger) {
+    init(id: Int, continuation: MQTTSubscription.Continuation, topicFilters: [TopicFilter]) {
         self.id = id
         self.topicFilters = topicFilters
         self.continuation = continuation
-        self.logger = logger
     }
 
     func sendMessage(_ message: MQTTPublishInfo) {
