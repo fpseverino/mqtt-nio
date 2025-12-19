@@ -115,7 +115,7 @@ struct MQTTConnectionV5Tests {
         }
     }
 
-    @Test("Subscribe Flags")
+    @Test("Subscribe with Flags")
     func subscribeFlags() async throws {
         let payloadString = #"{"test":1000000}"#
         let payload = ByteBufferAllocator().buffer(string: payloadString)
@@ -163,7 +163,7 @@ struct MQTTConnectionV5Tests {
         }
     }
 
-    @Test("Content Type")
+    @Test("Content Type Property")
     func contentType() async throws {
         let payloadString = #"{"test":1000000}"#
         let payload = ByteBufferAllocator().buffer(string: payloadString)
@@ -317,12 +317,12 @@ struct MQTTConnectionV5Tests {
         }
     }
 
-    @Test("Publish with Subscription")
-    func publishWithSubscription() async throws {
+    @Test("Publish with Subscription ID")
+    func publishWithSubscriptionID() async throws {
         try await MQTTConnection.withConnection(
             address: .hostname(Self.hostname),
             configuration: .init(versionConfiguration: .v5_0()),
-            identifier: "publishWithSubscription",
+            identifier: "publishWithSubscriptionID",
             logger: self.logger
         ) { connection in
             _ = await #expect(throws: MQTTPacketError.publishIncludesSubscription) {
@@ -336,7 +336,7 @@ struct MQTTConnectionV5Tests {
         }
     }
 
-    @Test("Auth")
+    @Test("Re-authentication Workflow")
     func auth() async throws {
         try await MQTTConnection.withConnection(
             address: .hostname(Self.hostname),
@@ -359,7 +359,7 @@ struct MQTTConnectionV5Tests {
         }
     }
 
-    @Test("Subscribe All", .disabled(if: ProcessInfo.processInfo.environment["CI"] != nil))
+    @Test("Subscribe to All Topics", .disabled(if: ProcessInfo.processInfo.environment["CI"] != nil))
     func subscribeAll() async throws {
         try await MQTTConnection.withConnection(
             address: .hostname("test.mosquitto.org"),
@@ -373,7 +373,7 @@ struct MQTTConnectionV5Tests {
         }
     }
 
-    @Test("Multi-level Wildcard")
+    @Test("Subscribe to Multi-level Wildcard")
     func multiLevelWildcard() async throws {
         try await MQTTConnection.withConnection(
             address: .hostname(Self.hostname),
@@ -410,7 +410,7 @@ struct MQTTConnectionV5Tests {
         }
     }
 
-    @Test("Single Level Wildcard")
+    @Test("Subscribe to Single Level Wildcard")
     func singleLevelWildcard() async throws {
         try await MQTTConnection.withConnection(
             address: .hostname(Self.hostname),
