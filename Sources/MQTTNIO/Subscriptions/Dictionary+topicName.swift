@@ -11,14 +11,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-extension Dictionary where Key == String {
+extension Dictionary where Key == TopicFilter {
     /// Iterates through all the keys, which should be MQTT topic filters,
     /// checks which of them match with the provided topic name,
     /// and returns an array of the associated values.
     subscript(topicName topicName: String) -> [Value] {
         let nameLevels = topicName.split(separator: "/", omittingEmptySubsequences: false).map { String($0) }
         return self.filter { topicFilter, _ in
-            let filterLevels = topicFilter.split(separator: "/", omittingEmptySubsequences: false).map { String($0) }
+            let filterLevels = topicFilter.levels
 
             var nameIndex = 0
             var filterIndex = 0
@@ -27,14 +27,14 @@ extension Dictionary where Key == String {
                 let filterLevel = filterLevels[filterIndex]
 
                 switch filterLevel {
-                case "#":
-                    // Multi-level wildcard must be the last filter level
-                    return filterIndex == filterLevels.count - 1
-                case "+":
+                case .multiLevelWildcard:
+                    // Multi-level wildcard matches any remaining levels
+                    return true
+                case .singleLevelWildcard:
                     // Single-level wildcard matches exactly one level
                     nameIndex += 1
                     filterIndex += 1
-                case nameLevels[nameIndex]:
+                case .string(let filterString) where filterString == nameLevels[nameIndex]:
                     // Exact match
                     nameIndex += 1
                     filterIndex += 1
@@ -47,7 +47,7 @@ extension Dictionary where Key == String {
             // Handle remaining filter levels
             if filterIndex < filterLevels.count {
                 // Only valid if remaining is just "#"
-                return filterIndex == filterLevels.count - 1 && filterLevels[filterIndex] == "#"
+                return filterIndex == filterLevels.count - 1 && filterLevels[filterIndex] == .multiLevelWildcard
             }
 
             // Both must be fully consumed

@@ -16,7 +16,7 @@ import Synchronization
 
 struct MQTTSubscriptions {
     var subscriptionIDMap: [Int: SubscriptionRef]
-    private var subscriptionMap: [String: MQTTTopicStateMachine<SubscriptionRef>]
+    private var subscriptionMap: [TopicFilter: MQTTTopicStateMachine<SubscriptionRef>]
     let logger: Logger
 
     static let globalSubscriptionID = Atomic<Int>(0)
@@ -69,21 +69,21 @@ struct MQTTSubscriptions {
     /// Add subscription to topic.
     mutating func addSubscription(
         continuation: MQTTSubscription.Continuation,
-        filters: [MQTTSubscribeInfoV5]
+        subscriptions: [MQTTSubscribeInfoV5]
     ) -> SubscribeAction {
         let id = Self.getSubscriptionID()
         let subscription = SubscriptionRef(
             id: id,
             continuation: continuation,
-            filters: filters,
+            topicFilters: subscriptions.compactMap { TopicFilter($0.topicFilter) },
             logger: self.logger
         )
         subscriptionIDMap[id] = subscription
         var action = SubscribeAction.doNothing(id)
-        for info in filters {
-            switch subscriptionMap[info.topicFilter, default: .init()].add(subscription: subscription) {
+        for topicFilter in subscription.topicFilters {
+            switch subscriptionMap[topicFilter, default: .init()].add(subscription: subscription) {
             case .subscribe:
-                action = .subscribe(subscription, info.topicFilter)
+                action = .subscribe(subscription, topicFilter.string)
             case .doNothing:
                 break
             }
@@ -103,14 +103,14 @@ struct MQTTSubscriptions {
     mutating func unsubscribe(id: Int) -> UnsubscribeAction {
         var action: UnsubscribeAction = .doNothing
         guard let subscription = subscriptionIDMap[id] else { return .doNothing }
-        for info in subscription.filters {
-            switch self.subscriptionMap[info.topicFilter]?.close(subscription: subscription) {
+        for topicFilter in subscription.topicFilters {
+            switch self.subscriptionMap[topicFilter]?.close(subscription: subscription) {
             case .unsubscribe:
                 switch action {
                 case .doNothing:
-                    action = .unsubscribe([info.topicFilter])
+                    action = .unsubscribe([topicFilter.string])
                 case .unsubscribe(var topics):
-                    topics.append(info.topicFilter)
+                    topics.append(topicFilter.string)
                     action = .unsubscribe(topics)
                 }
             case .doNothing, .none:
@@ -124,12 +124,12 @@ struct MQTTSubscriptions {
     /// Remove subscription
     mutating func removeSubscription(id: Int) {
         guard let subscription = subscriptionIDMap[id] else { return }
-        for info in subscription.filters {
-            switch self.subscriptionMap[info.topicFilter]?.close(subscription: subscription) {
+        for topicFilter in subscription.topicFilters {
+            switch self.subscriptionMap[topicFilter]?.close(subscription: subscription) {
             case .doNothing, .none:
                 break
             case .unsubscribe:
-                self.subscriptionMap[info.topicFilter] = nil
+                self.subscriptionMap[topicFilter] = nil
             }
         }
         subscriptionIDMap[id] = nil
@@ -139,13 +139,13 @@ struct MQTTSubscriptions {
 /// Individual subscription associated with one subscribe
 final class SubscriptionRef: Identifiable {
     let id: Int
-    let filters: [MQTTSubscribeInfoV5]
+    let topicFilters: [TopicFilter]
     let continuation: MQTTSubscription.Continuation
     let logger: Logger
 
-    init(id: Int, continuation: MQTTSubscription.Continuation, filters: [MQTTSubscribeInfoV5], logger: Logger) {
+    init(id: Int, continuation: MQTTSubscription.Continuation, topicFilters: [TopicFilter], logger: Logger) {
         self.id = id
-        self.filters = filters
+        self.topicFilters = topicFilters
         self.continuation = continuation
         self.logger = logger
     }

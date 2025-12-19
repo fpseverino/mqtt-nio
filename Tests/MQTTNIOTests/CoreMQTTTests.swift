@@ -77,17 +77,17 @@ struct CoreMQTTTests {
     @Test("Dictionary+topicName")
     func dictionaryTopicName() {
         let subscriptionMap = [
-            "home/+/temperature": "Subscription1",
-            "home/garden/#": "Subscription2",
-            "office/+/humidity": "Subscription3",
-            "#": "Subscription4",
-            "office/room1#": "Subscription5",
-            "sport/tennis/#/ranking": "Subscription6",
-            "sport/+": "Subscription7",
-            "sport+": "Subscription8",
-            "+/+": "Subscription9",
-            "+": "Subscription10",
-            "/+": "Subscription11",
+            TopicFilter("home/+/temperature")!: "Subscription1",
+            TopicFilter("home/garden/#")!: "Subscription2",
+            TopicFilter("office/+/humidity")!: "Subscription3",
+            TopicFilter("#")!: "Subscription4",
+            TopicFilter("office/room1#")!: "Subscription5",
+            TopicFilter("sport/tennis/#/ranking")!: "Subscription6",
+            TopicFilter("sport/+")!: "Subscription7",
+            TopicFilter("sport+")!: "Subscription8",
+            TopicFilter("+/+")!: "Subscription9",
+            TopicFilter("+")!: "Subscription10",
+            TopicFilter("/+")!: "Subscription11",
         ]
         #expect(subscriptionMap[topicName: "home/livingroom/temperature"].count == 2)
         #expect(subscriptionMap[topicName: "home/garden/humidity"].count == 2)
