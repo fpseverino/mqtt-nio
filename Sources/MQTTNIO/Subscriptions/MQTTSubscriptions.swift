@@ -36,7 +36,7 @@ struct MQTTSubscriptions {
             self.logger.trace("Received message for missing subscription", metadata: ["subscription": "\(message.topicName)"])
             return
         }
-        for topicStateMachine in topicStateMachines {
+        for var topicStateMachine in topicStateMachines {
             switch topicStateMachine.receivedMessage() {
             case .forwardMessage(let subscriptions):
                 for subscription in subscriptions {
