@@ -73,4 +73,32 @@ struct CoreMQTTTests {
         let packet = try MQTTIncomingPacket.read(from: &byteBuffer)
         #expect(packet.remainingData.readableBytes == 29)
     }
+
+    @Test("Dictionary+topicName")
+    func dictionaryTopicName() {
+        let subscriptionMap = [
+            TopicFilter("home/+/temperature")!: "Subscription1",
+            TopicFilter("home/garden/#")!: "Subscription2",
+            TopicFilter("office/+/humidity")!: "Subscription3",
+            TopicFilter("#")!: "Subscription4",
+            TopicFilter("office/room1#")!: "Subscription5",
+            TopicFilter("sport/tennis/#/ranking")!: "Subscription6",
+            TopicFilter("sport/+")!: "Subscription7",
+            TopicFilter("sport+")!: "Subscription8",
+            TopicFilter("+/+")!: "Subscription9",
+            TopicFilter("+")!: "Subscription10",
+            TopicFilter("/+")!: "Subscription11",
+        ]
+        #expect(subscriptionMap[topicName: "home/livingroom/temperature"].count == 2)
+        #expect(subscriptionMap[topicName: "home/garden/humidity"].count == 2)
+        #expect(subscriptionMap[topicName: "office/room1/humidity"].count == 2)
+        #expect(subscriptionMap[topicName: "home/garden"].count == 3)
+        #expect(subscriptionMap[topicName: "home/garden/temperature/soil"].count == 2)
+        #expect(subscriptionMap[topicName: "office/room1"].count == 2)
+        #expect(subscriptionMap[topicName: "sport/tennis/player1/ranking"].count == 1)
+        #expect(subscriptionMap[topicName: "sport/tennis"].count == 3)
+        #expect(subscriptionMap[topicName: "sport"].count == 2)
+        #expect(subscriptionMap[topicName: "sport/"].count == 3)
+        #expect(subscriptionMap[topicName: "/finance"].count == 3)
+    }
 }

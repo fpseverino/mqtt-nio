@@ -16,7 +16,7 @@ import Synchronization
 
 struct MQTTSubscriptions {
     var subscriptionIDMap: [Int: SubscriptionRef]
-    private var subscriptionMap: [String: MQTTTopicStateMachine<SubscriptionRef>]
+    private var subscriptionMap: [TopicFilter: MQTTTopicStateMachine<SubscriptionRef>]
     let logger: Logger
 
     static let globalSubscriptionID = Atomic<Int>(0)
@@ -31,13 +31,20 @@ struct MQTTSubscriptions {
     mutating func notify(_ message: MQTTPublishInfo) {
         self.logger.trace("Received PUBLISH packet", metadata: ["subscription": "\(message.topicName)"])
 
-        switch self.subscriptionMap[message.topicName]?.receivedMessage() {
-        case .forwardMessage(let subscriptions):
-            for subscription in subscriptions {
-                subscription.sendMessage(message)
+        let topicStateMachines = self.subscriptionMap[topicName: message.topicName]
+        guard !topicStateMachines.isEmpty else {
+            self.logger.trace("Received message for missing subscription", metadata: ["subscription": "\(message.topicName)"])
+            return
+        }
+        for topicStateMachine in topicStateMachines {
+            switch topicStateMachine.receivedMessage() {
+            case .forwardMessage(let subscriptions):
+                for subscription in subscriptions {
+                    subscription.sendMessage(message)
+                }
+            case .doNothing:
+                self.logger.trace("Received message for inactive subscription", metadata: ["subscription": "\(message.topicName)"])
             }
-        case .doNothing, .none:
-            self.logger.trace("Received message for inactive subscription", metadata: ["subscription": "\(message.topicName)"])
         }
     }
 
@@ -62,21 +69,21 @@ struct MQTTSubscriptions {
     /// Add subscription to topic.
     mutating func addSubscription(
         continuation: MQTTSubscription.Continuation,
-        filters: [MQTTSubscribeInfoV5]
+        subscriptions: [MQTTSubscribeInfoV5]
     ) -> SubscribeAction {
         let id = Self.getSubscriptionID()
         let subscription = SubscriptionRef(
             id: id,
             continuation: continuation,
-            filters: filters,
+            topicFilters: subscriptions.compactMap { TopicFilter($0.topicFilter) },
             logger: self.logger
         )
         subscriptionIDMap[id] = subscription
         var action = SubscribeAction.doNothing(id)
-        for info in filters {
-            switch subscriptionMap[info.topicFilter, default: .init()].add(subscription: subscription) {
+        for topicFilter in subscription.topicFilters {
+            switch subscriptionMap[topicFilter, default: .init()].add(subscription: subscription) {
             case .subscribe:
-                action = .subscribe(subscription, info.topicFilter)
+                action = .subscribe(subscription, topicFilter.string)
             case .doNothing:
                 break
             }
@@ -96,14 +103,14 @@ struct MQTTSubscriptions {
     mutating func unsubscribe(id: Int) -> UnsubscribeAction {
         var action: UnsubscribeAction = .doNothing
         guard let subscription = subscriptionIDMap[id] else { return .doNothing }
-        for info in subscription.filters {
-            switch self.subscriptionMap[info.topicFilter]?.close(subscription: subscription) {
+        for topicFilter in subscription.topicFilters {
+            switch self.subscriptionMap[topicFilter]?.close(subscription: subscription) {
             case .unsubscribe:
                 switch action {
                 case .doNothing:
-                    action = .unsubscribe([info.topicFilter])
+                    action = .unsubscribe([topicFilter.string])
                 case .unsubscribe(var topics):
-                    topics.append(info.topicFilter)
+                    topics.append(topicFilter.string)
                     action = .unsubscribe(topics)
                 }
             case .doNothing, .none:
@@ -117,12 +124,12 @@ struct MQTTSubscriptions {
     /// Remove subscription
     mutating func removeSubscription(id: Int) {
         guard let subscription = subscriptionIDMap[id] else { return }
-        for info in subscription.filters {
-            switch self.subscriptionMap[info.topicFilter]?.close(subscription: subscription) {
+        for topicFilter in subscription.topicFilters {
+            switch self.subscriptionMap[topicFilter]?.close(subscription: subscription) {
             case .doNothing, .none:
                 break
             case .unsubscribe:
-                self.subscriptionMap[info.topicFilter] = nil
+                self.subscriptionMap[topicFilter] = nil
             }
         }
         subscriptionIDMap[id] = nil
@@ -132,13 +139,13 @@ struct MQTTSubscriptions {
 /// Individual subscription associated with one subscribe
 final class SubscriptionRef: Identifiable {
     let id: Int
-    let filters: [MQTTSubscribeInfoV5]
+    let topicFilters: [TopicFilter]
     let continuation: MQTTSubscription.Continuation
     let logger: Logger
 
-    init(id: Int, continuation: MQTTSubscription.Continuation, filters: [MQTTSubscribeInfoV5], logger: Logger) {
+    init(id: Int, continuation: MQTTSubscription.Continuation, topicFilters: [TopicFilter], logger: Logger) {
         self.id = id
-        self.filters = filters
+        self.topicFilters = topicFilters
         self.continuation = continuation
         self.logger = logger
     }
