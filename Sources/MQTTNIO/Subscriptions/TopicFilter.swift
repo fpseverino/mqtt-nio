@@ -20,15 +20,15 @@ struct TopicFilter: Hashable {
 
     let levels: [Level]
 
-    init?(_ topicFilter: String) {
+    init(_ topicFilter: String) throws {
         self.string = topicFilter
         let filterLevels = topicFilter.split(separator: "/", omittingEmptySubsequences: false)
-        self.levels = filterLevels.enumerated().compactMap { index, level in
+        self.levels = try filterLevels.enumerated().map { index, level in
             switch level {
             case "#":
                 // Multi-level wildcard must be the last level
                 guard index == filterLevels.count - 1 else {
-                    return nil
+                    throw MQTTError.invalidTopicFilter(topicFilter)
                 }
                 return .multiLevelWildcard
             case "+":

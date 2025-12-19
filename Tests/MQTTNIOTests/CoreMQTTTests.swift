@@ -74,20 +74,43 @@ struct CoreMQTTTests {
         #expect(packet.remainingData.readableBytes == 29)
     }
 
+    @Test(
+        "TopicFilter",
+        arguments: [
+            "home/+/temperature",
+            "home/garden/#",
+            "office/+/humidity",
+            "#",
+            "office/room1#",
+            "sport/+",
+            "sport+",
+            "+/+",
+            "+",
+            "/+",
+        ]
+    )
+    func topicFilter(topicFilter: String) {
+        #expect(throws: Never.self) { try TopicFilter(topicFilter) }
+    }
+
+    @Test("Invalid TopicFilter", arguments: ["home/#/temperature", "sport/tennis/#/ranking", "#/office"])
+    func invalidTopicFilter(topicFilter: String) {
+        #expect(throws: MQTTError.invalidTopicFilter(topicFilter)) { try TopicFilter(topicFilter) }
+    }
+
     @Test("Dictionary+topicName")
-    func dictionaryTopicName() {
+    func dictionaryTopicName() throws {
         let subscriptionMap = [
-            TopicFilter("home/+/temperature")!: "Subscription1",
-            TopicFilter("home/garden/#")!: "Subscription2",
-            TopicFilter("office/+/humidity")!: "Subscription3",
-            TopicFilter("#")!: "Subscription4",
-            TopicFilter("office/room1#")!: "Subscription5",
-            TopicFilter("sport/tennis/#/ranking")!: "Subscription6",
-            TopicFilter("sport/+")!: "Subscription7",
-            TopicFilter("sport+")!: "Subscription8",
-            TopicFilter("+/+")!: "Subscription9",
-            TopicFilter("+")!: "Subscription10",
-            TopicFilter("/+")!: "Subscription11",
+            try TopicFilter("home/+/temperature"): "Subscription1",
+            try TopicFilter("home/garden/#"): "Subscription2",
+            try TopicFilter("office/+/humidity"): "Subscription3",
+            try TopicFilter("#"): "Subscription4",
+            try TopicFilter("office/room1#"): "Subscription5",
+            try TopicFilter("sport/+"): "Subscription7",
+            try TopicFilter("sport+"): "Subscription8",
+            try TopicFilter("+/+"): "Subscription9",
+            try TopicFilter("+"): "Subscription10",
+            try TopicFilter("/+"): "Subscription11",
         ]
         #expect(subscriptionMap[topicName: "home/livingroom/temperature"].count == 2)
         #expect(subscriptionMap[topicName: "home/garden/humidity"].count == 2)
