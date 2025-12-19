@@ -237,9 +237,9 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
         streamContinuation: MQTTSubscription.Continuation,
         packet: MQTTSubscribePacket,
         promise: MQTTPromise<Int>
-    ) {
+    ) throws {
         self.eventLoop.assertInEventLoop()
-        switch self.subscriptions.addSubscription(continuation: streamContinuation, subscriptions: packet.subscriptions) {
+        switch try self.subscriptions.addSubscription(continuation: streamContinuation, subscriptions: packet.subscriptions) {
         case .subscribe(let subscription, _):
             let subscriptionID = subscription.id
             guard !packet.subscriptions.isEmpty else {

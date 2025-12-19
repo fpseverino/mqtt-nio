@@ -70,12 +70,12 @@ struct MQTTSubscriptions {
     mutating func addSubscription(
         continuation: MQTTSubscription.Continuation,
         subscriptions: [MQTTSubscribeInfoV5]
-    ) -> SubscribeAction {
+    ) throws -> SubscribeAction {
         let id = Self.getSubscriptionID()
         let subscription = SubscriptionRef(
             id: id,
             continuation: continuation,
-            topicFilters: subscriptions.compactMap { TopicFilter($0.topicFilter) },
+            topicFilters: try subscriptions.map { try TopicFilter($0.topicFilter) },
             logger: self.logger
         )
         subscriptionIDMap[id] = subscription
