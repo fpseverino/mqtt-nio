@@ -373,6 +373,80 @@ struct MQTTConnectionV5Tests {
         }
     }
 
+    @Test("Multi-level Wildcard")
+    func multiLevelWildcard() async throws {
+        try await MQTTConnection.withConnection(
+            address: .hostname(Self.hostname),
+            configuration: .init(versionConfiguration: .v5_0()),
+            identifier: "multiLevelWildcard",
+            logger: self.logger
+        ) { connection in
+            try await withThrowingTaskGroup { group in
+                group.addTask {
+                    try await confirmation("multiLevelWildcard", expectedCount: 2) { receivedMessage in
+                        try await connection.v5.subscribe(to: [.init(topicFilter: "home/kitchen/#", qos: .atLeastOnce)]) { subscription in
+                            var count = 0
+                            for try await message in subscription {
+                                var buffer = message.payload
+                                let string = buffer.readString(length: buffer.readableBytes)
+                                #expect(string == "test")
+                                receivedMessage()
+                                count += 1
+                                if count == 2 { return }
+                            }
+                        }
+                    }
+                }
+
+                group.addTask {
+                    try await Task.sleep(for: .seconds(1))
+                    _ = try await connection.v5.publish(to: "home/kitchen/temperature", payload: ByteBuffer(string: "test"), qos: .atLeastOnce)
+                    _ = try await connection.v5.publish(to: "home/livingroom/temperature", payload: ByteBuffer(string: "error"), qos: .atLeastOnce)
+                    _ = try await connection.v5.publish(to: "home/kitchen/humidity", payload: ByteBuffer(string: "test"), qos: .atLeastOnce)
+                }
+
+                try await group.waitForAll()
+            }
+        }
+    }
+
+    @Test("Single Level Wildcard")
+    func singleLevelWildcard() async throws {
+        try await MQTTConnection.withConnection(
+            address: .hostname(Self.hostname),
+            configuration: .init(versionConfiguration: .v5_0()),
+            identifier: "singleLevelWildcard",
+            logger: self.logger
+        ) { connection in
+            try await withThrowingTaskGroup { group in
+                group.addTask {
+                    try await confirmation("singleLevelWildcard", expectedCount: 2) { receivedMessage in
+                        try await connection.v5.subscribe(to: [.init(topicFilter: "home/+/temperature", qos: .atLeastOnce)]) { subscription in
+                            var count = 0
+                            for try await message in subscription {
+                                var buffer = message.payload
+                                let string = buffer.readString(length: buffer.readableBytes)
+                                #expect(string == "test")
+                                receivedMessage()
+                                count += 1
+                                if count == 2 { return }
+                            }
+                        }
+                    }
+                }
+
+                group.addTask {
+                    try await Task.sleep(for: .seconds(1))
+                    _ = try await connection.v5.publish(to: "home/livingroom/temperature", payload: ByteBuffer(string: "test"), qos: .atLeastOnce)
+                    _ = try await connection.v5.publish(to: "home/garden/humidity", payload: ByteBuffer(string: "error"), qos: .atLeastOnce)
+                    _ = try await connection.v5.publish(to: "home/kitchen/temperature", payload: ByteBuffer(string: "test"), qos: .atLeastOnce)
+                }
+
+                try await group.waitForAll()
+            }
+        }
+    }
+
     let logger: Logger = {
         var logger = Logger(label: "MQTTNIOTests")
         logger.logLevel = .trace
