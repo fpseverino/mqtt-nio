@@ -284,6 +284,10 @@ struct MQTTConnectionTests {
                                 var buffer = message.payload
                                 let string = buffer.readString(length: buffer.readableBytes)
                                 #expect(string == payloadString)
+                                #expect(
+                                    !message.properties.contains { if case .subscriptionIdentifier = $0 { true } else { false } },
+                                    "Subscription Identifier property should not be present in v3.1.1 messages"
+                                )
                                 receivedMessage()
                                 count += 1
                                 if count == 2 { return }

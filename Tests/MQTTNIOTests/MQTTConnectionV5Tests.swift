@@ -141,6 +141,7 @@ struct MQTTConnectionV5Tests {
                                 var buffer = message.payload
                                 let string = buffer.readString(length: buffer.readableBytes)
                                 #expect(string == payloadString)
+                                #expect(message.properties.contains { if case .subscriptionIdentifier = $0 { true } else { false } })
                                 receivedMessage()
                                 return
                             }
@@ -182,6 +183,7 @@ struct MQTTConnectionV5Tests {
                                 var buffer = message.payload
                                 let string = buffer.readString(length: buffer.readableBytes)
                                 #expect(string == payloadString)
+                                #expect(message.properties.contains { if case .subscriptionIdentifier = $0 { true } else { false } })
                                 #expect(message.properties.contains { $0 == .contentType("application/json") })
                                 receivedMessage()
                                 return
@@ -218,6 +220,7 @@ struct MQTTConnectionV5Tests {
                     try await connection.v5.subscribe(to: [.init(topicFilter: "testMQTTUserProperty", qos: .atLeastOnce)]) { subscription in
                         try await confirmation("userProperty") { receivedMessage in
                             for try await message in subscription {
+                                #expect(message.properties.contains { if case .subscriptionIdentifier = $0 { true } else { false } })
                                 #expect(message.properties.contains { $0 == .userProperty("key", "value") })
                                 receivedMessage()
                                 return
@@ -390,6 +393,7 @@ struct MQTTConnectionV5Tests {
                                 var buffer = message.payload
                                 let string = buffer.readString(length: buffer.readableBytes)
                                 #expect(string == "test")
+                                #expect(message.properties.contains { if case .subscriptionIdentifier = $0 { true } else { false } })
                                 receivedMessage()
                                 count += 1
                                 if count == 2 { return }
@@ -427,6 +431,7 @@ struct MQTTConnectionV5Tests {
                                 var buffer = message.payload
                                 let string = buffer.readString(length: buffer.readableBytes)
                                 #expect(string == "test")
+                                #expect(message.properties.contains { if case .subscriptionIdentifier = $0 { true } else { false } })
                                 receivedMessage()
                                 count += 1
                                 if count == 2 { return }
@@ -469,6 +474,7 @@ struct MQTTConnectionV5Tests {
                                 var buffer = message.payload
                                 let string = buffer.readString(length: buffer.readableBytes)
                                 #expect(string == "test")
+                                #expect(message.properties.contains { if case .subscriptionIdentifier = $0 { true } else { false } })
                                 receivedMessage()
                                 count += 1
                                 if count == 2 { return }
