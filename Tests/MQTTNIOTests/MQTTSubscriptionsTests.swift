@@ -28,7 +28,7 @@ struct MQTTSubscriptionsTests {
         ]
         let (_, continuation) = MQTTSubscription.makeStream()
 
-        var subscriptionID = 0
+        var subscriptionID: UInt = 0
 
         switch try subscriptions.addSubscription(continuation: continuation, subscriptions: subscribeInfos) {
         case .subscribe(let subscriptionRef):
@@ -68,7 +68,7 @@ struct MQTTSubscriptionsTests {
         ]
         let (_, continuation) = MQTTSubscription.makeStream()
 
-        var subscriptionID = 0
+        var subscriptionID: UInt = 0
 
         switch try subscriptions.addSubscription(continuation: continuation, subscriptions: subscribeInfos) {
         case .subscribe(let subscriptionRef):

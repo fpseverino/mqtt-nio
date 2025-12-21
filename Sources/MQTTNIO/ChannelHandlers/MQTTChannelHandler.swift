@@ -236,7 +236,7 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
     func subscribe(
         streamContinuation: MQTTSubscription.Continuation,
         packet: MQTTSubscribePacket,
-        promise: MQTTPromise<Int>
+        promise: MQTTPromise<UInt>
     ) {
         self.eventLoop.assertInEventLoop()
 
@@ -273,7 +273,7 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
     }
 
     func unsubscribe(
-        id: Int,
+        id: UInt,
         packetID: UInt16,
         properties: MQTTProperties,
         promise: MQTTPromise<Void>
