@@ -77,7 +77,7 @@ struct MQTTSubscriptions {
     static func getSubscriptionID() -> UInt {
         // The Subscription Identifier can have the value of 1 to 268,435,455.
         // It is a Protocol Error if the Subscription Identifier has a value of 0.
-        if Self.globalSubscriptionID.load(ordering: .relaxed) > 268_435_455 {
+        if Self.globalSubscriptionID.load(ordering: .relaxed) >= 268_435_455 {
             Self.globalSubscriptionID.store(0, ordering: .relaxed)
         }
         return Self.globalSubscriptionID.wrappingAdd(1, ordering: .relaxed).newValue
