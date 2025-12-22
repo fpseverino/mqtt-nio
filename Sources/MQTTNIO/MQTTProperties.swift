@@ -112,13 +112,6 @@ extension MQTTProperties: Collection {
     }
 }
 
-extension MQTTProperties: RangeReplaceableCollection {
-    public mutating func replaceSubrange<C>(_ subrange: Range<Index>, with newElements: C)
-    where C: Collection, C.Element == Property {
-        self.properties.replaceSubrange(subrange, with: newElements)
-    }
-}
-
 extension MQTTProperties {
     func write(to byteBuffer: inout ByteBuffer) throws {
         MQTTSerializer.writeVariableLengthInteger(self.packetSize, to: &byteBuffer)

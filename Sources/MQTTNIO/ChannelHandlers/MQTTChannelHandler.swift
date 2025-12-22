@@ -260,9 +260,11 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
             }
             var packet = packet
             if self.configuration.version == .v5_0 {
+                var properties = packet.properties ?? []
+                properties.append(.subscriptionIdentifier(subscriptionID))
                 packet = MQTTSubscribePacket(
                     subscriptions: packet.subscriptions,
-                    properties: (packet.properties ?? []) + [.subscriptionIdentifier(subscriptionID)],
+                    properties: properties,
                     packetId: packet.packetId
                 )
             }
