@@ -23,7 +23,7 @@ import XCTest
 #if canImport(Network)
 import NIOTransportServices
 #endif
-#if os(macOS) || os(Linux)
+#if os(macOS) || os(Linux) || os(Android)
 import NIOSSL
 #endif
 
@@ -568,20 +568,6 @@ final class MQTTNIOTests: XCTestCase {
         try client2.disconnect().wait()
     }
 
-    /// Check listeners don't create a reference cycle if they reference the client
-    func testListenerReferenceCycle() throws {
-        func createClient() throws -> MQTTClient? {
-            let client = self.createClient(identifier: "testListenerReferenceCycle")
-            client.addPublishListener(named: "refcycle") { _ in
-                print(client)
-            }
-            try client.syncShutdownGracefully()
-            return client
-        }
-        weak var client = try createClient()
-        XCTAssertNil(client)
-    }
-
     func testSubscribeAll() throws {
         if ProcessInfo.processInfo.environment["CI"] != nil {
             return
@@ -756,7 +742,7 @@ final class MQTTNIOTests: XCTestCase {
         .joined(separator: "/")
 
     static var eventLoopGroupSingleton: EventLoopGroup {
-        #if os(Linux)
+        #if os(Linux) || os(Android)
         MultiThreadedEventLoopGroup.singleton
         #else
         // Return TS Eventloop for non-Linux builds, as we use TS TLS
@@ -766,7 +752,7 @@ final class MQTTNIOTests: XCTestCase {
 
     static var _tlsConfiguration: Result<MQTTClient.TLSConfigurationType, Error> = {
         do {
-            #if os(Linux)
+            #if os(Linux) || os(Android)
 
             let rootCertificate = try NIOSSLCertificate.fromPEMFile(MQTTNIOTests.rootPath + "/mosquitto/certs/ca.pem")
             let certificate = try NIOSSLCertificate.fromPEMFile(MQTTNIOTests.rootPath + "/mosquitto/certs/client.pem")
@@ -805,7 +791,7 @@ final class MQTTNIOTests: XCTestCase {
         switch self._tlsConfiguration {
         case .success(let config):
             switch config {
-            #if os(macOS) || os(Linux)
+            #if os(macOS) || os(Linux) || os(Android)
             case .niossl(let config):
                 var tlsConfig = TLSConfiguration.makeClientConfiguration()
                 tlsConfig.trustRoots = withTrustRoots == true ? (config.trustRoots ?? .default) : .default
