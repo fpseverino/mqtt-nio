@@ -2,7 +2,7 @@
 
 import PackageDescription
 
-var defaultSwiftSettings: [SwiftSetting] =
+let defaultSwiftSettings: [SwiftSetting] =
     [
         // https://github.com/swiftlang/swift-evolution/blob/main/proposals/0335-existential-any.md
         .enableUpcomingFeature("ExistentialAny"),
