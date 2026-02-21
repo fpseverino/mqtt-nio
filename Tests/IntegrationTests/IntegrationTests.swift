@@ -426,7 +426,7 @@ struct IntegrationTests {
             try await connection.ping()
         }
 
-        let session = MQTTSession(clientID: "sessionPresent")
+        let session = MQTTSession(clientID: "sessionPresent", logger: self.logger)
 
         // Second connection with a `MQTTSession` with same client identifier (and `cleanSession` automatically set to false)
         // `sessionPresent` should be false as previous connection was with `cleanSession` true
@@ -686,7 +686,7 @@ struct IntegrationTests {
 
             group.addTask {
                 try await Task.sleep(for: .milliseconds(500))
-                let session = MQTTSession(clientID: "inflight_publisher")
+                let session = MQTTSession(clientID: "inflight_publisher", logger: self.logger)
 
                 try await MQTTConnection.withConnection(
                     address: .hostname(Self.hostname),
@@ -716,7 +716,7 @@ struct IntegrationTests {
 
     @Test("Multiple Connections with Same Session")
     func multipleConnectionsWithSameSession() async throws {
-        let session = MQTTSession(clientID: "multipleConnectionsWithSameSession")
+        let session = MQTTSession(clientID: "multipleConnectionsWithSameSession", logger: self.logger)
 
         await #expect(throws: MQTTError.alreadyConnectedWithSession) {
             try await withThrowingTaskGroup { group in

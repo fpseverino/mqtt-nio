@@ -24,7 +24,7 @@ import Testing
 struct MQTTConnectionTests {
     func withTestMQTTServer(
         configuration: MQTTConnectionConfiguration = .init(),
-        session: MQTTSession = MQTTSession(clientID: ""),
+        session: MQTTSession = MQTTSession(clientID: "", logger: Logger(label: "test_session")),
         logger: Logger = Logger(label: "test"),
         connackProperties: MQTTProperties = .init(),
         client clientOperation: @Sendable @escaping (MQTTConnection) async throws -> Void,
@@ -571,7 +571,7 @@ struct MQTTConnectionTests {
         let connection = try await MQTTConnection.setupChannelAndConnect(
             channel,
             configuration: .init(versionConfiguration: .v5_0(authWorkflow: SimpleAuthWorkflow())),
-            session: MQTTSession(clientID: ""),
+            session: MQTTSession(clientID: "", logger: logger),
             logger: logger
         )
         return try await withThrowingTaskGroup { group in
@@ -664,7 +664,7 @@ struct MQTTConnectionTests {
         var logger = Logger(label: "inflight")
         logger.logLevel = .trace
 
-        let session = MQTTSession(clientID: "inflight")
+        let session = MQTTSession(clientID: "inflight", logger: logger)
 
         // This stream is used to pass the PUBLISH packet ID from the first server to the second
         let (publishPacketIDStream, publishPacketIDCont) = AsyncStream.makeStream(of: UInt16.self)

@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+public import Logging
 import NIOCore
 import Synchronization
 
@@ -25,6 +26,8 @@ public final class MQTTSession: Sendable {
     /// Inflight messages
     let inflightPackets: Mutex<MQTTInflight>
 
+    let subscriptions: Mutex<MQTTSubscriptions>
+
     /// Initialize a new ``MQTTSession`` with a unique client identifier.
     ///
     /// If you provide an empty string as the Client Identifier,
@@ -35,10 +38,13 @@ public final class MQTTSession: Sendable {
     /// If you reuse the same session for other connections,
     /// the following connections will use the new Client Identifier assigned by the server.
     ///
-    /// - Parameter clientID: Client identifier to use for this session. This must be unique.
-    public init(clientID: String) {
+    /// - Parameters:
+    ///   - clientID: Client identifier to use for this session. This must be unique.
+    ///   - logger: Logger to use for this session.
+    public init(clientID: String, logger: Logger) {
         self._clientID = .init(clientID)
         self.inflightPackets = .init(.init())
+        self.subscriptions = .init(.init(logger: logger))
         self.isConnected = .init(false)
     }
 }

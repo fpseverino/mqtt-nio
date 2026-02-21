@@ -248,7 +248,7 @@ public final actor MQTTConnection: Sendable {
         eventLoop: any EventLoop = MultiThreadedEventLoopGroup.singleton.any(),
         logger: Logger
     ) async throws -> (MQTTConnection, Bool) {
-        let _session = session ?? MQTTSession(clientID: identifier)
+        let _session = session ?? MQTTSession(clientID: identifier, logger: logger)
         var configuration = configuration
         if configuration.pingInterval == nil {
             configuration.pingInterval = TimeAmount.seconds(max(Int64(configuration.keepAliveInterval.nanoseconds / 1_000_000_000) - 5, 5))
@@ -417,10 +417,10 @@ public final actor MQTTConnection: Sendable {
                                 webSocketConfiguration: webSocketConfiguration,
                                 upgradePromise: promise
                             ) {
-                                try self._setupChannel(channel, configuration: configuration, logger: logger)
+                                try self._setupChannel(channel, configuration: configuration, session: session, logger: logger)
                             }
                         } else {
-                            try self._setupChannel(channel, configuration: configuration, logger: logger)
+                            try self._setupChannel(channel, configuration: configuration, session: session, logger: logger)
                         }
                         return eventLoop.makeSucceededVoidFuture()
                     } catch {
@@ -503,6 +503,7 @@ public final actor MQTTConnection: Sendable {
                     let handler = try self._setupChannel(
                         channel,
                         configuration: configuration,
+                        session: session,
                         logger: logger
                     )
                     return MQTTConnection(
@@ -524,12 +525,14 @@ public final actor MQTTConnection: Sendable {
     private static func _setupChannel(
         _ channel: any Channel,
         configuration: MQTTConnectionConfiguration,
+        session: MQTTSession,
         logger: Logger
     ) throws -> MQTTChannelHandler {
         channel.eventLoop.assertInEventLoop()
         let mqttChannelHandler = MQTTChannelHandler(
             configuration: MQTTChannelHandler.Configuration(configuration),
             eventLoop: channel.eventLoop,
+            session: session,
             logger: logger
         )
         try channel.pipeline.syncOperations.addHandler(mqttChannelHandler)
