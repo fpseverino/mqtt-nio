@@ -158,6 +158,7 @@ public final actor MQTTConnection: Sendable {
             logger: logger
         )
         do {
+            await connection.retrieveQueuedSessionSubscriptions()
             let result = try await operation(connection, sessionPresent)
             await connection.saveInflightToSession()
             connection.close()
@@ -344,13 +345,38 @@ public final actor MQTTConnection: Sendable {
         else {
             throw MQTTError.alreadyConnectedWithSession
         }
+        self.session.connection.withLock { $0 = self }
         return try await self._connect(packet: packet, authWorkflow: authenticator).sessionPresent
+    }
+
+    /// Move the queued subscriptions opened by the ``MQTTSession`` to the channel handler.
+    func retrieveQueuedSessionSubscriptions() {
+        let queuedSubscriptions = self.session.subscriptions.withLock {
+            let queuedSubscriptions = $0.sessionSubscriptionsQueue
+            $0.sessionSubscriptionsQueue.removeAll()
+            return queuedSubscriptions
+        }
+        for queuedSubscription in queuedSubscriptions {
+            let packet = MQTTSubscribePacket(
+                subscriptions: queuedSubscription.subscriptions,
+                properties: queuedSubscription.properties,
+                packetId: self.updatePacketId()
+            )
+            self.channelHandler.subscribe(
+                id: queuedSubscription.id,
+                streamContinuation: queuedSubscription.continuation,
+                packet: packet,
+                promise: .forget,  // TODO: fix this
+                requestID: Self.requestIDGenerator.next()
+            )
+        }
     }
 
     /// Copy the local copy of inflight messages back to the session.
     func saveInflightToSession() {
         self.session.inflightPackets.withLock { $0 = inflight }
         self.session.isConnected.store(false, ordering: .relaxed)
+        self.session.connection.withLock { $0 = nil }
     }
 
     func sendDisconnect() throws {

@@ -13,7 +13,7 @@
 
 public import Logging
 import NIOCore
-import Synchronization
+public import Synchronization
 
 /// Represents an MQTT session, holding session state such as inflight messages.
 /// Used by ``MQTTConnection`` to manage session state across connections.
@@ -22,6 +22,8 @@ public final class MQTTSession: Sendable {
 
     /// Whether a ``MQTTConnection`` is currently connected using this session.
     let isConnected: Atomic<Bool>
+    @usableFromInline
+    let connection: Mutex<MQTTConnection?>
 
     /// Inflight messages
     let inflightPackets: Mutex<MQTTInflight>
@@ -46,6 +48,7 @@ public final class MQTTSession: Sendable {
         self.inflightPackets = .init(.init())
         self.subscriptions = .init(.init(logger: logger))
         self.isConnected = .init(false)
+        self.connection = .init(nil)
     }
 }
 

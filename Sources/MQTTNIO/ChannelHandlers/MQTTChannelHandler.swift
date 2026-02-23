@@ -256,7 +256,17 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
 
     // MARK: - Subscriptions
 
+    /// Add a subscription to ``MQTTSubscriptions``.
+    ///
+    /// - Parameters:
+    ///   - id: Provide a subscription ID if the subscription was opened by a ``MQTTSession``.
+    ///         If `nil`, a new subscription ID will automatically be generated.
+    ///   - continuation: The subscription stream continuation to send messages to.
+    ///   - packet: The ``MQTTSubscribePacket`` containing the subscription information.
+    ///   - promise: The promise to complete with the subscription ID once the subscription is added.
+    ///   - requestID: The request ID for the subscribe operation.
     func subscribe(
+        id: UInt32? = nil,
         streamContinuation: MQTTSubscription.Continuation,
         packet: MQTTSubscribePacket,
         promise: MQTTPromise<UInt32>,
@@ -268,6 +278,7 @@ final class MQTTChannelHandler: ChannelDuplexHandler {
         do {
             subscribeAction = try self.session.subscriptions.withLock { subscriptions in
                 try subscriptions.addSubscription(
+                    id: id,
                     continuation: streamContinuation,
                     subscriptions: packet.subscriptions,
                     version: self.configuration.version

@@ -21,10 +21,15 @@ struct MQTTSubscriptions {
 
     static let globalSubscriptionID = Atomic<UInt32>(0)
 
+    /// Subscriptions opened by a ``MQTTSession``
+    /// that are waiting for the connection to be established before they can be subscribed.
+    var sessionSubscriptionsQueue: [QueuedSessionSubscription]
+
     init(logger: Logger) {
         self.subscriptionIDMap = [:]
         self.logger = logger
         self.subscriptionMap = [:]
+        self.sessionSubscriptionsQueue = []
     }
 
     /// We received a message
@@ -87,12 +92,20 @@ struct MQTTSubscriptions {
     }
 
     /// Add subscription to topic.
+    ///
+    /// - Parameters:
+    ///   - id: Provide a subscription ID if the subscription was opened by a ``MQTTSession``.
+    ///         If `nil`, a new subscription ID will automatically be generated.
+    ///   - continuation: The subscription stream continuation to send messages to.
+    ///   - subscriptions: The list of topic filters and QoS levels to subscribe to.
+    ///   - version: The MQTT version of the subscription.
     mutating func addSubscription(
+        id: UInt32?,
         continuation: MQTTSubscription.Continuation,
         subscriptions: [MQTTSubscribeInfoV5],
         version: MQTTConnectionConfiguration.Version
     ) throws -> SubscribeAction {
-        let id = Self.getSubscriptionID()
+        let id = id ?? Self.getSubscriptionID()
         let subscription = SubscriptionRef(
             id: id,
             version: version,
@@ -207,4 +220,13 @@ final class SubscriptionRef: Identifiable {
     func finish() {
         self.continuation.finish()
     }
+}
+
+/// Info about a subscription opened by a ``MQTTSession``
+/// that is waiting for the connection to be established before it can be subscribed.
+struct QueuedSessionSubscription {
+    let id: UInt32
+    let continuation: MQTTSubscription.Continuation
+    let subscriptions: [MQTTSubscribeInfoV5]
+    let properties: MQTTProperties
 }
