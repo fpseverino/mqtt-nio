@@ -21,15 +21,10 @@ struct MQTTSubscriptions {
 
     static let globalSubscriptionID = Atomic<UInt32>(0)
 
-    /// Subscriptions opened by a ``MQTTSession``
-    /// that are waiting for the connection to be established before they can be subscribed.
-    var sessionSubscriptionsQueue: [QueuedSessionSubscription]
-
     init(logger: Logger) {
         self.subscriptionIDMap = [:]
         self.logger = logger
         self.subscriptionMap = [:]
-        self.sessionSubscriptionsQueue = []
     }
 
     /// We received a message
@@ -220,13 +215,4 @@ final class SubscriptionRef: Identifiable {
     func finish() {
         self.continuation.finish()
     }
-}
-
-/// Info about a subscription opened by a ``MQTTSession``
-/// that is waiting for the connection to be established before it can be subscribed.
-struct QueuedSessionSubscription {
-    let id: UInt32
-    let continuation: MQTTSubscription.Continuation
-    let subscriptions: [MQTTSubscribeInfoV5]
-    let properties: MQTTProperties
 }

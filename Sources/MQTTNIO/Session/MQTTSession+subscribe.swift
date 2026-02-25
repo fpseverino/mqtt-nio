@@ -11,8 +11,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-public import Synchronization
-
 extension MQTTSession {
     @inlinable
     public nonisolated func subscribe<Value>(
@@ -22,28 +20,8 @@ extension MQTTSession {
         process: (MQTTSubscription) async throws -> Value
     ) async throws -> Value {
         let (id, stream) = try self.subscribe(to: subscriptions, properties: subscribeProperties)
-        let value: Value
-        do {
-            value = try await process(stream)
-            try Task.checkCancellation()
-        } catch {
-            // call unsubscribe in unstructured Task to avoid it being cancelled
-            _ = await Task {
-                // TODO: fix this
-                if let connection = self.connection.withLock({ $0 }) {
-                    try await connection.unsubscribe(id: id, properties: unsubscribeProperties)
-                }
-            }.result
-            throw error
-        }
-        // call unsubscribe in unstructured Task to avoid it being cancelled
-        _ = try await Task {
-            // TODO: fix this
-            if let connection = self.connection.withLock({ $0 }) {
-                try await connection.unsubscribe(id: id, properties: unsubscribeProperties)
-            }
-        }.value
-        return value
+        defer { self.unsubscriptionsQueueContinuation.yield((id, unsubscribeProperties)) }
+        return try await process(stream)
     }
 
     @usableFromInline
@@ -56,16 +34,13 @@ extension MQTTSession {
             throw MQTTError.cancelledTask
         }
         let subscriptionID = MQTTSubscriptions.getSubscriptionID()
-        self.subscriptions.withLock {
-            $0.sessionSubscriptionsQueue.append(
-                QueuedSessionSubscription(
-                    id: subscriptionID,
-                    continuation: streamContinuation,
-                    subscriptions: subscriptions,
-                    properties: properties
-                )
-            )
-        }
+        let subscription = QueuedSubscription(
+            id: subscriptionID,
+            continuation: streamContinuation,
+            subscriptions: subscriptions,
+            properties: properties
+        )
+        subscriptionsQueueContinuation.yield(subscription)
         return (subscriptionID, stream)
     }
 }

@@ -13,7 +13,7 @@
 
 public import Logging
 import NIOCore
-public import Synchronization
+import Synchronization
 
 /// Represents an MQTT session, holding session state such as inflight messages.
 /// Used by ``MQTTConnection`` to manage session state across connections.
@@ -22,13 +22,18 @@ public final class MQTTSession: Sendable {
 
     /// Whether a ``MQTTConnection`` is currently connected using this session.
     let isConnected: Atomic<Bool>
-    @usableFromInline
-    let connection: Mutex<MQTTConnection?>
 
     /// Inflight messages
     let inflightPackets: Mutex<MQTTInflight>
 
     let subscriptions: Mutex<MQTTSubscriptions>
+
+    let subscriptionsQueue: AsyncStream<QueuedSubscription>
+    let subscriptionsQueueContinuation: AsyncStream<QueuedSubscription>.Continuation
+
+    let unsubscriptionsQueue: AsyncStream<(UInt32, MQTTProperties)>
+    @usableFromInline
+    let unsubscriptionsQueueContinuation: AsyncStream<(UInt32, MQTTProperties)>.Continuation
 
     /// Initialize a new ``MQTTSession`` with a unique client identifier.
     ///
@@ -48,7 +53,8 @@ public final class MQTTSession: Sendable {
         self.inflightPackets = .init(.init())
         self.subscriptions = .init(.init(logger: logger))
         self.isConnected = .init(false)
-        self.connection = .init(nil)
+        (self.subscriptionsQueue, self.subscriptionsQueueContinuation) = AsyncStream.makeStream()
+        (self.unsubscriptionsQueue, self.unsubscriptionsQueueContinuation) = AsyncStream.makeStream()
     }
 }
 
@@ -76,5 +82,16 @@ extension MQTTSession {
     /// Used for testing
     package var inflightPacketsCount: Int {
         self.inflightPackets.withLock { $0.packets.count }
+    }
+}
+
+// MARK: - Subscriptions
+
+extension MQTTSession { 
+    struct QueuedSubscription {
+        let id: UInt32
+        let continuation: MQTTSubscription.Continuation
+        let subscriptions: [MQTTSubscribeInfoV5]
+        let properties: MQTTProperties
     }
 }
