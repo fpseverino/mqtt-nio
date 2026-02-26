@@ -28,12 +28,9 @@ public final class MQTTSession: Sendable {
 
     let subscriptions: Mutex<MQTTSubscriptions>
 
-    let subscriptionsQueue: AsyncStream<QueuedSubscription>
-    let subscriptionsQueueContinuation: AsyncStream<QueuedSubscription>.Continuation
-
-    let unsubscriptionsQueue: AsyncStream<(UInt32, MQTTProperties)>
+    let subscriptionsQueue: AsyncStream<SessionSubscriptionTask>
     @usableFromInline
-    let unsubscriptionsQueueContinuation: AsyncStream<(UInt32, MQTTProperties)>.Continuation
+    let subscriptionsQueueContinuation: AsyncStream<SessionSubscriptionTask>.Continuation
 
     /// Initialize a new ``MQTTSession`` with a unique client identifier.
     ///
@@ -54,7 +51,6 @@ public final class MQTTSession: Sendable {
         self.subscriptions = .init(.init(logger: logger))
         self.isConnected = .init(false)
         (self.subscriptionsQueue, self.subscriptionsQueueContinuation) = AsyncStream.makeStream()
-        (self.unsubscriptionsQueue, self.unsubscriptionsQueueContinuation) = AsyncStream.makeStream()
     }
 }
 
@@ -87,11 +83,18 @@ extension MQTTSession {
 
 // MARK: - Subscriptions
 
-extension MQTTSession { 
-    struct QueuedSubscription {
+extension MQTTSession {
+    @usableFromInline
+    struct QueuedSubscription: Sendable {
         let id: UInt32
         let continuation: MQTTSubscription.Continuation
         let subscriptions: [MQTTSubscribeInfoV5]
         let properties: MQTTProperties
+    }
+
+    @usableFromInline
+    enum SessionSubscriptionTask: Sendable {
+        case subscribe(QueuedSubscription)
+        case unsubscribe(UInt32, MQTTProperties)
     }
 }

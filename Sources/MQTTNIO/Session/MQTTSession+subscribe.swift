@@ -20,7 +20,7 @@ extension MQTTSession {
         process: (MQTTSubscription) async throws -> Value
     ) async throws -> Value {
         let (id, stream) = try self.subscribe(to: subscriptions, properties: subscribeProperties)
-        defer { self.unsubscriptionsQueueContinuation.yield((id, unsubscribeProperties)) }
+        defer { self.subscriptionsQueueContinuation.yield(.unsubscribe(id, unsubscribeProperties)) }
         return try await process(stream)
     }
 
@@ -40,7 +40,7 @@ extension MQTTSession {
             subscriptions: subscriptions,
             properties: properties
         )
-        subscriptionsQueueContinuation.yield(subscription)
+        subscriptionsQueueContinuation.yield(.subscribe(subscription))
         return (subscriptionID, stream)
     }
 }

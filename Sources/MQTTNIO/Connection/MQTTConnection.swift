@@ -87,8 +87,8 @@ public final actor MQTTConnection: Sendable {
         identifier: String = "",
         eventLoop: any EventLoop = MultiThreadedEventLoopGroup.singleton.any(),
         logger: Logger,
-        operation: (MQTTConnection, Bool) async throws -> sending Value
-    ) async throws -> sending Value {
+        operation: (MQTTConnection, Bool) async throws -> Value
+    ) async throws -> Value {
         let (connection, sessionPresent) = try await self.connect(
             address: address,
             session: nil,
@@ -117,8 +117,8 @@ public final actor MQTTConnection: Sendable {
         identifier: String = "",
         eventLoop: any EventLoop = MultiThreadedEventLoopGroup.singleton.any(),
         logger: Logger,
-        operation: (MQTTConnection) async throws -> sending Value
-    ) async throws -> sending Value {
+        operation: (MQTTConnection) async throws -> Value
+    ) async throws -> Value {
         try await Self.withConnection(
             address: address,
             configuration: configuration,
@@ -147,7 +147,7 @@ public final actor MQTTConnection: Sendable {
         session: MQTTSession,
         eventLoop: any EventLoop = MultiThreadedEventLoopGroup.singleton.any(),
         logger: Logger,
-        operation: (MQTTConnection, Bool) async throws -> sending Value
+        operation: (MQTTConnection, Bool) async throws -> Value
     ) async throws -> Value {
         let (connection, sessionPresent) = try await self.connect(
             address: address,
@@ -160,28 +160,28 @@ public final actor MQTTConnection: Sendable {
         do {
             let result = try await withThrowingTaskGroup { group in
                 group.addTask {
-                    for await queuedSubscription in session.subscriptionsQueue {
-                        let packet = MQTTSubscribePacket(
-                            subscriptions: queuedSubscription.subscriptions,
-                            properties: queuedSubscription.properties,
-                            packetId: await connection.updatePacketId()
-                        )
-                        connection.channel.eventLoop.execute {
-                            connection.assumeIsolated {
-                                $0.channelHandler.subscribe(
-                                    id: queuedSubscription.id,
-                                    streamContinuation: queuedSubscription.continuation,
-                                    packet: packet,
-                                    promise: .forget, // TODO: fix this
-                                    requestID: Self.requestIDGenerator.next()
-                                )
+                    for await task in session.subscriptionsQueue {
+                        switch task {
+                        case .subscribe(let queuedSubscription):
+                            let packet = MQTTSubscribePacket(
+                                subscriptions: queuedSubscription.subscriptions,
+                                properties: queuedSubscription.properties,
+                                packetId: await connection.updatePacketId()
+                            )
+                            connection.channel.eventLoop.execute {
+                                connection.assumeIsolated {
+                                    $0.channelHandler.subscribe(
+                                        id: queuedSubscription.id,
+                                        streamContinuation: queuedSubscription.continuation,
+                                        packet: packet,
+                                        promise: .forget,  // TODO: fix this
+                                        requestID: Self.requestIDGenerator.next()
+                                    )
+                                }
                             }
+                        case .unsubscribe(let id, let properties):
+                            try await connection.unsubscribe(id: id, properties: properties)
                         }
-                    }
-                }
-                group.addTask {
-                    for await (id, properties) in session.unsubscriptionsQueue {
-                        try await connection.unsubscribe(id: id, properties: properties)
                     }
                 }
                 defer { group.cancelAll() }
@@ -213,7 +213,7 @@ public final actor MQTTConnection: Sendable {
         session: MQTTSession,
         eventLoop: any EventLoop = MultiThreadedEventLoopGroup.singleton.any(),
         logger: Logger,
-        operation: (MQTTConnection) async throws -> sending Value
+        operation: (MQTTConnection) async throws -> Value
     ) async throws -> Value {
         try await Self.withConnection(
             address: address,

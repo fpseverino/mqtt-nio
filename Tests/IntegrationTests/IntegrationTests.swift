@@ -751,27 +751,23 @@ struct IntegrationTests {
 
     @Test("Subscribe with Session")
     func subscribeWithSession() async throws {
-        let session = MQTTSession(clientID: "subscribeWithSession", logger: self.logger)
+        // Make an initial connection with `cleanSession` to clear any existing session state
+        try await MQTTConnection.withConnection(
+            address: .hostname(Self.hostname),
+            identifier: "subscribeWithSession",
+            logger: self.logger
+        ) { connection in
+            try await connection.ping()
+        }
 
-        // Make an initial connection to establish the session on the server
-        //try await MQTTConnection.withConnection(
-        //    address: .hostname(Self.hostname),
-        //    session: session,
-        //    logger: self.logger
-        //) { connection, sessionPresent in
-        //    #expect(!sessionPresent)
-        //    try await connection.ping()
-        //}
+        let session = MQTTSession(clientID: "subscribeWithSession", logger: self.logger)
 
         await withThrowingTaskGroup { group in
             group.addTask {
                 try await session.subscribe(to: [.init(topicFilter: "subscribeWithSession", qos: .atMostOnce)]) { subscription in
-                    for try await message in subscription {
-                        var buffer = message.payload
-                        let string = buffer.readString(length: buffer.readableBytes)
-                        #expect(string == "test")
-                        return
-                    }
+                    var iterator = subscription.makeAsyncIterator()
+                    try #expect(await (iterator.next()?.payload).map { String(buffer: $0) } == "test")
+                    try #expect(await (iterator.next()?.payload).map { String(buffer: $0) } == "test2")
                 }
             }
 
@@ -784,8 +780,17 @@ struct IntegrationTests {
                     // Wait for the subscription to be established before publishing
                     try await Task.sleep(for: .milliseconds(100))
 
-                    //#expect(sessionPresent)
+                    #expect(!sessionPresent)
                     try await connection.publish(to: "subscribeWithSession", payload: ByteBuffer(string: "test"), qos: .atMostOnce)
+                }
+
+                try await MQTTConnection.withConnection(
+                    address: .hostname(Self.hostname),
+                    session: session,
+                    logger: self.logger
+                ) { connection, sessionPresent in
+                    #expect(sessionPresent)
+                    try await connection.publish(to: "subscribeWithSession", payload: ByteBuffer(string: "test2"), qos: .atMostOnce)
 
                     // Wait to ensure the UNSUBSCRIBE is sent before the connection is closed
                     try await Task.sleep(for: .milliseconds(100))
