@@ -159,31 +159,7 @@ public final actor MQTTConnection: Sendable {
         )
         do {
             let result = try await withThrowingTaskGroup { group in
-                group.addTask {
-                    for await task in session.subscriptionsQueue {
-                        switch task {
-                        case .subscribe(let queuedSubscription):
-                            let packet = MQTTSubscribePacket(
-                                subscriptions: queuedSubscription.subscriptions,
-                                properties: queuedSubscription.properties,
-                                packetId: await connection.updatePacketId()
-                            )
-                            connection.channel.eventLoop.execute {
-                                connection.assumeIsolated {
-                                    $0.channelHandler.subscribe(
-                                        id: queuedSubscription.id,
-                                        streamContinuation: queuedSubscription.continuation,
-                                        packet: packet,
-                                        promise: .forget,  // TODO: fix this
-                                        requestID: Self.requestIDGenerator.next()
-                                    )
-                                }
-                            }
-                        case .unsubscribe(let id, let properties):
-                            try await connection.unsubscribe(id: id, properties: properties)
-                        }
-                    }
-                }
+                group.addTask { try await connection.handleSessionSubscriptionTasks() }
                 defer { group.cancelAll() }
                 return try await operation(connection, sessionPresent)
             }
@@ -379,6 +355,29 @@ public final actor MQTTConnection: Sendable {
     func saveInflightToSession() {
         self.session.inflightPackets.withLock { $0 = inflight }
         self.session.isConnected.store(false, ordering: .relaxed)
+    }
+
+    /// Iterates over subscription tasks in the session queue and handles them.
+    func handleSessionSubscriptionTasks() async throws {
+        for await task in session.subscriptionsQueue {
+            switch task {
+            case .subscribe(let queuedSubscription):
+                let packet = MQTTSubscribePacket(
+                    subscriptions: queuedSubscription.subscriptions,
+                    properties: queuedSubscription.properties,
+                    packetId: self.updatePacketId()
+                )
+                self.channelHandler.subscribe(
+                    id: queuedSubscription.id,
+                    streamContinuation: queuedSubscription.continuation,
+                    packet: packet,
+                    promise: .forget,  // TODO: fix this
+                    requestID: Self.requestIDGenerator.next()
+                )
+            case .unsubscribe(let id, let properties):
+                try await self.unsubscribe(id: id, properties: properties)
+            }
+        }
     }
 
     func sendDisconnect() throws {
