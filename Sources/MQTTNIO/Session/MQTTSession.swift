@@ -84,17 +84,38 @@ extension MQTTSession {
 // MARK: - Subscriptions
 
 extension MQTTSession {
+    /// Information about a queued subscription opened via a ``MQTTSession``.
     @usableFromInline
     struct QueuedSubscription: Sendable {
+        /// The unique identifier for this subscription, used in ``MQTTSubscriptions``.
         let id: UInt32
+        /// The continuation used to send messages to the subscription stream opened via a ``MQTTSession``.
         let continuation: MQTTSubscription.Continuation
+        /// The subscription information for this subscription, used to create the SUBSCRIBE packet.
         let subscriptions: [MQTTSubscribeInfoV5]
+        /// MQTT v5 properties to include in the SUBSCRIBE packet for this subscription.
         let properties: MQTTProperties
     }
 
+    /// Information about a queued unsubscription for a subscription opened via a ``MQTTSession``.
+    @usableFromInline
+    struct QueuedUnsubscription: Sendable {
+        /// The unique identifier for the subscription, used in ``MQTTSubscriptions``.
+        let id: UInt32
+        /// MQTT v5 properties to include in the UNSUBSCRIBE packet.
+        let properties: MQTTProperties
+
+        @usableFromInline
+        init(id: UInt32, properties: MQTTProperties) {
+            self.id = id
+            self.properties = properties
+        }
+    }
+
+    /// A task sent by the ``MQTTSession`` to the ``MQTTConnection`` to manage subscriptions opened via the session.
     @usableFromInline
     enum SessionSubscriptionTask: Sendable {
         case subscribe(QueuedSubscription)
-        case unsubscribe(UInt32, MQTTProperties)
+        case unsubscribe(QueuedUnsubscription)
     }
 }

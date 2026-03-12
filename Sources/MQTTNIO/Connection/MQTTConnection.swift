@@ -374,8 +374,8 @@ public final actor MQTTConnection: Sendable {
                     promise: .forget,  // TODO: fix this
                     requestID: Self.requestIDGenerator.next()
                 )
-            case .unsubscribe(let id, let properties):
-                try await self.unsubscribe(id: id, properties: properties)
+            case .unsubscribe(let queuedUnsubscription):
+                try await self.unsubscribe(id: queuedUnsubscription.id, properties: queuedUnsubscription.properties)
             }
         }
     }
