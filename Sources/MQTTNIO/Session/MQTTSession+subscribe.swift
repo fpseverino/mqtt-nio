@@ -13,7 +13,7 @@
 
 extension MQTTSession {
     @inlinable
-    public nonisolated func subscribe<Value>(
+    public func subscribe<Value>(
         to subscriptions: [MQTTSubscribeInfoV5],
         subscribeProperties: MQTTProperties = .init(),
         unsubscribeProperties: MQTTProperties = .init(),
